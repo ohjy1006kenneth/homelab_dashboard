@@ -1,0 +1,13 @@
+{
+  "added_at": "2026-05-28T15:49:57.653038Z",
+  "author": "BigBearTechWorld",
+  "category": "BigBearCasaOS",
+  "description": "Syncthing is a continuous file synchronization program. It synchronizes files between two or more computers. We strive to fulfill the goals below. The goals are listed in order of importance, the most important one being the first.",
+  "icon": "icon.png",
+  "id": "big-bear-syncthing",
+  "main_service": "big-bear-syncthing",
+  "name": "Syncthing",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": 8384
+}

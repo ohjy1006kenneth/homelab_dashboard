@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""Migrate CasaOS app definitions into the lab.local dashboard.
+
+This script copies each CasaOS app compose file into this project, extracts the
+CasaOS metadata into apps/{app_id}/meta.json, downloads/copies icons when
+available, and upserts App rows into data/dashboard.db.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import sqlite3
+import subprocess
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+CASAOS_APPS_DIR = Path("/var/lib/casaos/apps")
+PROJECT_DIR = Path("/home/juyoungoh/nas/Projects/dashboard")
+DASHBOARD_APPS_DIR = PROJECT_DIR / "apps"
+DATA_DIR = PROJECT_DIR / "data"
+DB_PATH = DATA_DIR / "dashboard.db"
+REPORT_PATH = DATA_DIR / "migration_report.json"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def localized(value: Any) -> str | None:
+    """Return a friendly string from CasaOS localized fields."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        for key in ("custom", "en_us", "en", "default"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        for candidate in value.values():
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return str(value).strip() or None
+
+
+def safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(str(value).split("/")[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def load_yaml(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} did not contain a YAML mapping")
+    return data
+
+
+def get_resolved_compose(app_id: str) -> str | None:
+    """Ask casaos-cli for resolved compose YAML, if that command exists/works."""
+    cmd = ["casaos-cli", "app-management", "show", "local", app_id, "--yaml"]
+    try:
+        result = subprocess.run(cmd, check=False, text=True, capture_output=True, timeout=30)
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+    output = result.stdout.strip()
+    if result.returncode == 0 and output:
+        return output + "\n"
+    return None
+
+
+def find_compose_path(app_dir: Path) -> Path | None:
+    for name in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"):
+        candidate = app_dir / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def choose_main_service(compose: dict[str, Any], casaos: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
+    services = compose.get("services") or {}
+    if not isinstance(services, dict) or not services:
+        return None, {}
+
+    main_name = casaos.get("main") or casaos.get("main_service")
+    if main_name in services and isinstance(services[main_name], dict):
+        return str(main_name), services[main_name]
+
+    # Prefer the first service carrying x-casaos metadata, otherwise the first service.
+    for name, service in services.items():
+        if isinstance(service, dict) and "x-casaos" in service:
+            return str(name), service
+    name, service = next(iter(services.items()))
+    return str(name), service if isinstance(service, dict) else {}
+
+
+def extract_host_ports(service: dict[str, Any]) -> list[int]:
+    host_ports: list[int] = []
+    ports = service.get("ports") or []
+    if not isinstance(ports, list):
+        return host_ports
+
+    for entry in ports:
+        if isinstance(entry, dict):
+            published = entry.get("published") or entry.get("host_port")
+            port = safe_int(published)
+            if port is not None:
+                host_ports.append(port)
+        elif isinstance(entry, str):
+            # Handles "8080:80", "127.0.0.1:8080:80", and "80".
+            no_proto = entry.split("/")[0]
+            parts = no_proto.split(":")
+            if len(parts) >= 2:
+                port = safe_int(parts[-2])
+            else:
+                port = safe_int(parts[0])
+            if port is not None:
+                host_ports.append(port)
+    return host_ports
+
+
+def determine_web_port(casaos: dict[str, Any], service: dict[str, Any]) -> int | None:
+    for key in ("port_map", "port", "web_ui_port"):
+        port = safe_int(casaos.get(key))
+        if port is not None:
+            return port
+
+    host_ports = extract_host_ports(service)
+    if not host_ports:
+        return None
+
+    # Prefer common HTTP(S) app ports; otherwise first published host port.
+    preferred = [p for p in host_ports if p not in (53, 67) and (p >= 80 or p in (443,))]
+    return preferred[0] if preferred else host_ports[0]
+
+
+def resolve_icon(app_id: str, app_dir: Path, app_out_dir: Path, casaos: dict[str, Any], service: dict[str, Any]) -> bool:
+    local_icon = app_dir / "icon.png"
+    output_icon = app_out_dir / "icon.png"
+    if local_icon.exists():
+        shutil.copy2(local_icon, output_icon)
+        return True
+
+    icon = casaos.get("icon") or casaos.get("thumbnail")
+    labels = service.get("labels") if isinstance(service, dict) else None
+    if not icon and isinstance(labels, dict):
+        icon = labels.get("icon")
+    if not icon and isinstance(labels, list):
+        for label in labels:
+            if isinstance(label, str) and label.startswith("icon="):
+                icon = label.split("=", 1)[1]
+                break
+
+    if isinstance(icon, str) and icon.startswith(("http://", "https://")):
+        try:
+            req = urllib.request.Request(icon, headers={"User-Agent": "lab.local migration"})
+            with urllib.request.urlopen(req, timeout=20) as response:
+                output_icon.write_bytes(response.read())
+            return True
+        except Exception as exc:  # noqa: BLE001 - record and continue migration.
+            print(f"Warning: failed to download icon for {app_id}: {exc}", file=sys.stderr)
+            return False
+
+    if isinstance(icon, str) and icon:
+        candidate = (app_dir / icon).resolve() if not icon.startswith("/") else Path(icon)
+        if candidate.exists() and candidate.is_file():
+            shutil.copy2(candidate, output_icon)
+            return True
+
+    return False
+
+
+def init_db() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                category TEXT,
+                icon_path TEXT,
+                web_ui_port INTEGER,
+                web_ui_path TEXT NOT NULL DEFAULT '/',
+                compose_path TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                added_at TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'casaos'
+            )
+            """
+        )
+        conn.commit()
+
+
+def upsert_app(meta: dict[str, Any], compose_path: Path) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO app (
+                id, name, description, category, icon_path, web_ui_port,
+                web_ui_path, compose_path, enabled, added_at, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                description=excluded.description,
+                category=excluded.category,
+                icon_path=excluded.icon_path,
+                web_ui_port=excluded.web_ui_port,
+                web_ui_path=excluded.web_ui_path,
+                compose_path=excluded.compose_path,
+                enabled=1,
+                source=excluded.source
+            """,
+            (
+                meta["id"],
+                meta["name"],
+                meta.get("description"),
+                meta.get("category"),
+                meta.get("icon"),
+                meta.get("web_ui_port"),
+                meta.get("web_ui_path", "/"),
+                str(compose_path),
+                meta["added_at"],
+                meta.get("source", "casaos"),
+            ),
+        )
+        conn.commit()
+
+
+def migrate_app(app_dir: Path) -> dict[str, Any]:
+    app_id = app_dir.name
+    compose_in = find_compose_path(app_dir)
+    if compose_in is None:
+        return {"id": app_id, "status": "skipped", "reason": "no compose file"}
+
+    compose = load_yaml(compose_in)
+    casaos = compose.get("x-casaos") or {}
+    if not isinstance(casaos, dict):
+        casaos = {}
+    main_service_name, service = choose_main_service(compose, casaos)
+
+    app_out_dir = DASHBOARD_APPS_DIR / app_id
+    app_out_dir.mkdir(parents=True, exist_ok=True)
+    compose_out = app_out_dir / "docker-compose.yml"
+
+    resolved = get_resolved_compose(app_id)
+    if resolved:
+        compose_out.write_text(resolved, encoding="utf-8")
+        # Use resolved content for metadata if it still parses cleanly.
+        try:
+            compose = yaml.safe_load(resolved) or compose
+            if isinstance(compose, dict):
+                casaos = compose.get("x-casaos") or casaos
+                main_service_name, service = choose_main_service(compose, casaos if isinstance(casaos, dict) else {})
+        except yaml.YAMLError:
+            pass
+    else:
+        shutil.copy2(compose_in, compose_out)
+
+    web_port = determine_web_port(casaos, service)
+    web_path = localized(casaos.get("index")) or localized(casaos.get("web_ui_path")) or "/"
+    if not web_path.startswith("/"):
+        web_path = f"/{web_path}"
+
+    icon_found = resolve_icon(app_id, app_dir, app_out_dir, casaos, service)
+    name = localized(casaos.get("title")) or localized(casaos.get("name")) or app_id.replace("-", " ").title()
+    description = localized(casaos.get("description")) or localized(casaos.get("tagline"))
+
+    meta = {
+        "id": app_id,
+        "name": name,
+        "description": description,
+        "category": localized(casaos.get("category")),
+        "author": localized(casaos.get("author")) or localized(casaos.get("developer")),
+        "icon": "icon.png" if icon_found else None,
+        "web_ui_port": web_port,
+        "web_ui_path": web_path,
+        "added_at": utc_now(),
+        "source": "casaos",
+        "main_service": main_service_name,
+    }
+
+    (app_out_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    upsert_app(meta, compose_out)
+
+    return {"id": app_id, "status": "migrated", "icon": icon_found, "web_ui_port": web_port, "name": name}
+
+
+def main() -> int:
+    if not CASAOS_APPS_DIR.exists():
+        print(f"CasaOS apps directory does not exist: {CASAOS_APPS_DIR}", file=sys.stderr)
+        return 1
+
+    DASHBOARD_APPS_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    init_db()
+
+    results: list[dict[str, Any]] = []
+    for app_dir in sorted(CASAOS_APPS_DIR.iterdir(), key=lambda p: p.name):
+        if not app_dir.is_dir():
+            continue
+        try:
+            results.append(migrate_app(app_dir))
+        except Exception as exc:  # noqa: BLE001 - one bad app should not abort the migration.
+            results.append({"id": app_dir.name, "status": "skipped", "reason": str(exc)})
+            print(f"Warning: failed to migrate {app_dir.name}: {exc}", file=sys.stderr)
+
+    migrated = [r for r in results if r.get("status") == "migrated"]
+    skipped = [r for r in results if r.get("status") == "skipped"]
+    icons_found = sum(1 for r in migrated if r.get("icon"))
+
+    report = {
+        "generated_at": utc_now(),
+        "source_dir": str(CASAOS_APPS_DIR),
+        "apps_dir": str(DASHBOARD_APPS_DIR),
+        "database": str(DB_PATH),
+        "migrated_count": len(migrated),
+        "skipped_count": len(skipped),
+        "icons_found": icons_found,
+        "icons_total": len(migrated),
+        "migrated_apps": migrated,
+        "skipped_apps": skipped,
+    }
+    REPORT_PATH.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    migrated_names = ", ".join(r["id"] for r in migrated) or "none"
+    print(f"Migrated {len(migrated)} apps: {migrated_names}")
+    print(f"Skipped {len(skipped)} apps")
+    if skipped:
+        for item in skipped:
+            print(f"- skipped {item['id']}: {item.get('reason', 'unknown reason')}")
+    print(f"Icons found: {icons_found}/{len(migrated)}")
+    print(f"Report written: {REPORT_PATH}")
+    return 0 if migrated else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

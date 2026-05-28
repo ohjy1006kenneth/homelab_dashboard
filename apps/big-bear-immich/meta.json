@@ -1,0 +1,13 @@
+{
+  "added_at": "2026-05-28T15:49:53.390653Z",
+  "author": "BigBearTechWorld",
+  "category": "BigBearCasaOS",
+  "description": "Self-hosted photo and video storage.",
+  "icon": "icon.png",
+  "id": "big-bear-immich",
+  "main_service": "immich-server",
+  "name": "Immich",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": 2283
+}

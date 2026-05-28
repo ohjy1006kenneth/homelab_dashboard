@@ -1,0 +1,48 @@
+{
+  "apps_dir": "/home/juyoungoh/nas/Projects/dashboard/apps",
+  "database": "/home/juyoungoh/nas/Projects/dashboard/data/dashboard.db",
+  "generated_at": "2026-05-28T15:49:57.667717Z",
+  "icons_found": 4,
+  "icons_total": 5,
+  "migrated_apps": [
+    {
+      "icon": true,
+      "id": "big-bear-immich",
+      "name": "Immich",
+      "status": "migrated",
+      "web_ui_port": 2283
+    },
+    {
+      "icon": true,
+      "id": "big-bear-pihole",
+      "name": "Pi-hole",
+      "status": "migrated",
+      "web_ui_port": 8080
+    },
+    {
+      "icon": true,
+      "id": "big-bear-portainer",
+      "name": "Portainer",
+      "status": "migrated",
+      "web_ui_port": 9000
+    },
+    {
+      "icon": true,
+      "id": "big-bear-syncthing",
+      "name": "Syncthing",
+      "status": "migrated",
+      "web_ui_port": 8384
+    },
+    {
+      "icon": false,
+      "id": "hermes-agent",
+      "name": "Hermes Agent",
+      "status": "migrated",
+      "web_ui_port": null
+    }
+  ],
+  "migrated_count": 5,
+  "skipped_apps": [],
+  "skipped_count": 0,
+  "source_dir": "/var/lib/casaos/apps"
+}

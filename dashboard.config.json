@@ -1,0 +1,19 @@
+{
+  "title": "lab.local",
+  "theme": "dark",
+  "accent": "#ffffff",
+  "agents": [
+    {
+      "id": "newsletter-agent",
+      "name": "Newsletter Fetcher",
+      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/newsletter_fetcher.py",
+      "schedule": "0 8 * * *",
+      "description": "Fetches and summarizes RSS newsletters"
+    }
+  ],
+  "newsletter_sources": [
+    { "name": "Semiconductor Engineering", "rss": "https://semiengineering.com/feed/", "color": "#3b82f6" },
+    { "name": "Chips and Cheese", "rss": "https://chipsandcheese.com/feed/", "color": "#22c55e" },
+    { "name": "Heisenberg", "rss": "https://heisenberg.kr/feed/", "color": "#a855f7" }
+  ]
+}

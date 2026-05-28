@@ -1,0 +1,13 @@
+{
+  "added_at": "2026-05-28T15:49:54.539131Z",
+  "author": "BigBearTechWorld",
+  "category": "BigBearCasaOS",
+  "description": "The Pi-hole\u00ae is a DNS sinkhole that protects your devices from unwanted content without installing any client-side software.",
+  "icon": "icon.png",
+  "id": "big-bear-pihole",
+  "main_service": "app",
+  "name": "Pi-hole",
+  "source": "casaos",
+  "web_ui_path": "/admin",
+  "web_ui_port": 8080
+}
