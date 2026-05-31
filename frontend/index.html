@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lab.local</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="mark">◆</span> lab.local</div>
+        <nav>
+          <a class="active" href="#overview">Overview</a>
+          <a href="#apps">Apps</a>
+          <a href="#agents">Agents</a>
+          <a href="#news">News</a>
+          <a href="#stocks">Stocks</a>
+        </nav>
+        <div class="sidebar-footer"><span id="uptime">Pi uptime —</span></div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Homelab</p>
+            <h1>Overview</h1>
+          </div>
+          <div id="api-status" class="api-status">Connecting…</div>
+        </header>
+        <section class="content">
+          <div id="metrics" class="metrics-grid"></div>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Applications</p>
+                <h2>CasaOS migration</h2>
+              </div>
+              <input id="app-search" type="search" placeholder="Search apps…" />
+            </div>
+            <div id="app-grid" class="app-grid"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
