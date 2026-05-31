@@ -14,3 +14,7 @@ venv/
 /apps/*/docker-compose.yaml
 /apps/*/compose.yml
 /apps/*/compose.yaml
+
+# Migrated CasaOS application data can contain databases, passwords, tokens, and
+# large runtime files. Keep it local and out of the public repo.
+/appdata/

@@ -3,12 +3,14 @@
 
 This script copies each CasaOS app compose file into this project, extracts the
 CasaOS metadata into apps/{app_id}/meta.json, downloads/copies icons when
-available, and upserts App rows into data/dashboard.db.
+available, copies matching /DATA/AppData/{app_id} directories into local
+appdata/{app_id}, and upserts App rows into data/dashboard.db.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -21,8 +23,10 @@ from typing import Any
 import yaml
 
 CASAOS_APPS_DIR = Path("/var/lib/casaos/apps")
+CASAOS_APPDATA_DIR = Path("/DATA/AppData")
 PROJECT_DIR = Path("/home/juyoungoh/nas/Projects/dashboard")
 DASHBOARD_APPS_DIR = PROJECT_DIR / "apps"
+DASHBOARD_APPDATA_DIR = PROJECT_DIR / "appdata"
 DATA_DIR = PROJECT_DIR / "data"
 DB_PATH = DATA_DIR / "dashboard.db"
 REPORT_PATH = DATA_DIR / "migration_report.json"
@@ -180,6 +184,64 @@ def resolve_icon(app_id: str, app_dir: Path, app_out_dir: Path, casaos: dict[str
     return False
 
 
+def directory_size(path: Path) -> int:
+    """Return directory size in bytes, ignoring unreadable files."""
+    total = 0
+    for root, _dirs, files in os.walk(path, onerror=lambda _err: None):
+        for filename in files:
+            try:
+                total += (Path(root) / filename).stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def copy_appdata(app_id: str) -> dict[str, Any]:
+    """Copy /DATA/AppData/{app_id} into project-local appdata/{app_id}."""
+    appdata_in = CASAOS_APPDATA_DIR / app_id
+    appdata_out = DASHBOARD_APPDATA_DIR / app_id
+
+    if not appdata_in.exists():
+        return {"source": str(appdata_in), "path": None, "status": "missing", "copied": False, "reason": "not found"}
+    if not appdata_in.is_dir():
+        return {"source": str(appdata_in), "path": None, "status": "skipped", "copied": False, "reason": "not a directory"}
+
+    DASHBOARD_APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Prefer rsync when present: it is resumable, preserves metadata, and keeps
+    # repeated migrations fast. Fall back to shutil on minimal installs.
+    rsync = shutil.which("rsync")
+    if rsync:
+        result = subprocess.run(
+            [rsync, "-a", "--delete", f"{appdata_in}/", f"{appdata_out}/"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=900,
+        )
+        if result.returncode != 0:
+            reason = (result.stderr or result.stdout or f"rsync exited {result.returncode}").strip()
+            partial = appdata_out.exists()
+            return {
+                "source": str(appdata_in),
+                "path": str(appdata_out) if partial else None,
+                "status": "partial" if partial else "failed",
+                "copied": False,
+                "reason": reason,
+                "size_bytes": directory_size(appdata_out) if partial else None,
+            }
+    else:
+        shutil.copytree(appdata_in, appdata_out, dirs_exist_ok=True, symlinks=True)
+
+    return {
+        "source": str(appdata_in),
+        "path": str(appdata_out),
+        "status": "copied",
+        "copied": True,
+        "size_bytes": directory_size(appdata_out),
+    }
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -194,12 +256,16 @@ def init_db() -> None:
                 web_ui_port INTEGER,
                 web_ui_path TEXT NOT NULL DEFAULT '/',
                 compose_path TEXT NOT NULL,
+                appdata_path TEXT,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 added_at TEXT NOT NULL,
                 source TEXT NOT NULL DEFAULT 'casaos'
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(app)")}
+        if "appdata_path" not in columns:
+            conn.execute("ALTER TABLE app ADD COLUMN appdata_path TEXT")
         conn.commit()
 
 
@@ -209,8 +275,8 @@ def upsert_app(meta: dict[str, Any], compose_path: Path) -> None:
             """
             INSERT INTO app (
                 id, name, description, category, icon_path, web_ui_port,
-                web_ui_path, compose_path, enabled, added_at, source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                web_ui_path, compose_path, appdata_path, enabled, added_at, source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 description=excluded.description,
@@ -219,6 +285,7 @@ def upsert_app(meta: dict[str, Any], compose_path: Path) -> None:
                 web_ui_port=excluded.web_ui_port,
                 web_ui_path=excluded.web_ui_path,
                 compose_path=excluded.compose_path,
+                appdata_path=excluded.appdata_path,
                 enabled=1,
                 source=excluded.source
             """,
@@ -231,6 +298,7 @@ def upsert_app(meta: dict[str, Any], compose_path: Path) -> None:
                 meta.get("web_ui_port"),
                 meta.get("web_ui_path", "/"),
                 str(compose_path),
+                meta.get("appdata_path"),
                 meta["added_at"],
                 meta.get("source", "casaos"),
             ),
@@ -274,6 +342,7 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
         web_path = f"/{web_path}"
 
     icon_found = resolve_icon(app_id, app_dir, app_out_dir, casaos, service)
+    appdata = copy_appdata(app_id)
     name = localized(casaos.get("title")) or localized(casaos.get("name")) or app_id.replace("-", " ").title()
     description = localized(casaos.get("description")) or localized(casaos.get("tagline"))
 
@@ -286,6 +355,10 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
         "icon": "icon.png" if icon_found else None,
         "web_ui_port": web_port,
         "web_ui_path": web_path,
+        "appdata_path": appdata.get("path"),
+        "appdata_source": appdata.get("source"),
+        "appdata_status": appdata.get("status"),
+        "appdata_size_bytes": appdata.get("size_bytes"),
         "added_at": utc_now(),
         "source": "casaos",
         "main_service": main_service_name,
@@ -294,7 +367,14 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
     (app_out_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     upsert_app(meta, compose_out)
 
-    return {"id": app_id, "status": "migrated", "icon": icon_found, "web_ui_port": web_port, "name": name}
+    return {
+        "id": app_id,
+        "status": "migrated",
+        "icon": icon_found,
+        "web_ui_port": web_port,
+        "name": name,
+        "appdata": appdata,
+    }
 
 
 def main() -> int:
@@ -323,7 +403,9 @@ def main() -> int:
     report = {
         "generated_at": utc_now(),
         "source_dir": str(CASAOS_APPS_DIR),
+        "appdata_source_dir": str(CASAOS_APPDATA_DIR),
         "apps_dir": str(DASHBOARD_APPS_DIR),
+        "appdata_dir": str(DASHBOARD_APPDATA_DIR),
         "database": str(DB_PATH),
         "migrated_count": len(migrated),
         "skipped_count": len(skipped),

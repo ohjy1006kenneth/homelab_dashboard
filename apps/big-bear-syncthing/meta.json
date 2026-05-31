@@ -1,5 +1,9 @@
 {
-  "added_at": "2026-05-28T15:49:57.653038Z",
+  "added_at": "2026-05-31T11:18:56.105538Z",
+  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-syncthing",
+  "appdata_size_bytes": 145708527,
+  "appdata_source": "/DATA/AppData/big-bear-syncthing",
+  "appdata_status": "copied",
   "author": "BigBearTechWorld",
   "category": "BigBearCasaOS",
   "description": "Syncthing is a continuous file synchronization program. It synchronizes files between two or more computers. We strive to fulfill the goals below. The goals are listed in order of importance, the most important one being the first.",

@@ -1,0 +1,17 @@
+{
+  "added_at": "2026-05-31T11:18:56.323460Z",
+  "appdata_path": null,
+  "appdata_size_bytes": null,
+  "appdata_source": "/DATA/AppData/torbox-media-center",
+  "appdata_status": "missing",
+  "author": "TorBox + local blackhole watcher",
+  "category": "Media",
+  "description": "Blackhole watcher uploads torrents to TorBox, arr-strm-sync creates Jellyfin STRM files, and the delete webhook cleans up TorBox and Jellyfin on deletion.",
+  "icon": null,
+  "id": "torbox-media-center",
+  "main_service": "torbox-blackhole-watcher",
+  "name": "TorBox Stack",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": null
+}

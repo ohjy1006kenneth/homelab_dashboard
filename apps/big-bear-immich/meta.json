@@ -1,5 +1,9 @@
 {
-  "added_at": "2026-05-28T15:49:53.390653Z",
+  "added_at": "2026-05-31T11:18:55.341782Z",
+  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich",
+  "appdata_size_bytes": 872453232,
+  "appdata_source": "/DATA/AppData/big-bear-immich",
+  "appdata_status": "partial",
   "author": "BigBearTechWorld",
   "category": "BigBearCasaOS",
   "description": "Self-hosted photo and video storage.",
