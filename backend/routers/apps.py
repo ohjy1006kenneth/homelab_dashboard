@@ -7,12 +7,18 @@ from urllib.parse import quote
 
 import yaml
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
 from backend.database import PROJECT_DIR, get_connection, rows_to_dicts
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 APPS_DIR = PROJECT_DIR / "apps"
+
+
+class ComposeUpdate(BaseModel):
+    content: str
+
 
 
 def _app_row(app_id: str) -> sqlite3.Row:
@@ -55,6 +61,19 @@ def _compose_status(compose_path: str | None) -> str:
     return "running" if running else "stopped"
 
 
+def _compose_file(row: sqlite3.Row) -> Path:
+    compose_path = row["compose_path"]
+    if not compose_path:
+        raise HTTPException(status_code=404, detail="Compose file not found")
+    path = Path(compose_path).resolve()
+    apps_root = APPS_DIR.resolve()
+    if apps_root not in path.parents:
+        raise HTTPException(status_code=400, detail="Compose path is outside the managed apps directory")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Compose file not found")
+    return path
+
+
 def _serialize_app(row: sqlite3.Row, include_services: bool = False) -> dict:
     app = dict(row)
     app_id = app["id"]
@@ -90,6 +109,27 @@ def get_icon(app_id: str) -> FileResponse:
     if not icon.exists():
         raise HTTPException(status_code=404, detail="Icon not found")
     return FileResponse(icon)
+
+
+@router.get("/{app_id}/compose")
+def get_compose(app_id: str) -> dict[str, str]:
+    row = _app_row(app_id)
+    path = _compose_file(row)
+    return {"app_id": app_id, "path": str(path), "content": path.read_text(encoding="utf-8")}
+
+
+@router.put("/{app_id}/compose")
+def update_compose(app_id: str, payload: ComposeUpdate) -> dict[str, str | bool]:
+    row = _app_row(app_id)
+    path = _compose_file(row)
+    try:
+        parsed = yaml.safe_load(payload.content)
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("services"), dict) or not parsed["services"]:
+        raise HTTPException(status_code=400, detail="Compose must contain a non-empty services mapping")
+    path.write_text(payload.content.rstrip() + "\n", encoding="utf-8")
+    return {"ok": True, "path": str(path)}
 
 
 def _run_compose(app_id: str, args: list[str]) -> dict[str, str | bool]:
