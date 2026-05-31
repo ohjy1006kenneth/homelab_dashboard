@@ -18,3 +18,7 @@ venv/
 # Migrated CasaOS application data can contain databases, passwords, tokens, and
 # large runtime files. Keep it local and out of the public repo.
 /appdata/
+
+# App-local environment files copied from CasaOS can contain API keys.
+/apps/*/.env
+/apps/*/.env.*

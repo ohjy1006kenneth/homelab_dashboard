@@ -1,5 +1,5 @@
 {
-  "added_at": "2026-05-31T13:14:15.400065Z",
+  "added_at": "2026-05-31T13:19:51.706609Z",
   "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich",
   "appdata_size_bytes": 1175687803,
   "appdata_source": "/DATA/AppData/big-bear-immich",
@@ -12,6 +12,22 @@
   "main_service": "immich-server",
   "name": "Immich",
   "source": "casaos",
+  "volume_appdata": [
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich/pgdata",
+      "size_bytes": 303234571,
+      "source": "/DATA/AppData/big-bear-immich/pgdata",
+      "status": "copied"
+    },
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich/model-cache",
+      "size_bytes": 823603647,
+      "source": "/DATA/AppData/big-bear-immich/model-cache",
+      "status": "copied"
+    }
+  ],
   "web_ui_path": "/",
   "web_ui_port": 2283
 }

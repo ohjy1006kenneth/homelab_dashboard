@@ -1,5 +1,5 @@
 {
-  "added_at": "2026-05-31T13:14:18.711217Z",
+  "added_at": "2026-05-31T13:19:55.240797Z",
   "appdata_path": null,
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/flaresolverr",
@@ -12,6 +12,7 @@
   "main_service": "flaresolverr",
   "name": "FlareSolverr",
   "source": "casaos",
+  "volume_appdata": [],
   "web_ui_path": "/",
   "web_ui_port": 8191
 }

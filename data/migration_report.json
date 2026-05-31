@@ -3,7 +3,7 @@
   "appdata_source_dir": "/DATA/AppData",
   "apps_dir": "/home/juyoungoh/nas/Projects/dashboard/apps",
   "database": "/home/juyoungoh/nas/Projects/dashboard/data/dashboard.db",
-  "generated_at": "2026-05-31T13:14:23.139119Z",
+  "generated_at": "2026-05-31T13:20:25.654812Z",
   "icons_found": 10,
   "icons_total": 12,
   "migrated_apps": [
@@ -53,7 +53,7 @@
       "appdata": {
         "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr",
-        "size_bytes": 7636669,
+        "size_bytes": 7643983,
         "source": "/DATA/AppData/big-bear-seerr",
         "status": "copied"
       },
@@ -67,7 +67,7 @@
       "appdata": {
         "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-syncthing",
-        "size_bytes": 142603951,
+        "size_bytes": 148974415,
         "source": "/DATA/AppData/big-bear-syncthing",
         "status": "copied"
       },

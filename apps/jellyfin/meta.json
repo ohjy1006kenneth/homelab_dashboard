@@ -1,6 +1,6 @@
 {
-  "added_at": "2026-05-31T13:14:19.879143Z",
-  "appdata_path": null,
+  "added_at": "2026-05-31T13:20:16.293117Z",
+  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/jellyfin/config",
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/jellyfin",
   "appdata_status": "missing",
@@ -12,6 +12,15 @@
   "main_service": "jellyfin",
   "name": "Jellyfin",
   "source": "casaos",
+  "volume_appdata": [
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/jellyfin/config",
+      "size_bytes": 2895465302,
+      "source": "/DATA/AppData/media-stack/jellyfin/config",
+      "status": "copied"
+    }
+  ],
   "web_ui_path": "/",
   "web_ui_port": 8097
 }

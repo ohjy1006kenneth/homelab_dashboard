@@ -1,7 +1,7 @@
 {
-  "added_at": "2026-05-31T13:14:17.327406Z",
+  "added_at": "2026-05-31T13:19:54.504359Z",
   "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr",
-  "appdata_size_bytes": 7636669,
+  "appdata_size_bytes": 7643983,
   "appdata_source": "/DATA/AppData/big-bear-seerr",
   "appdata_status": "copied",
   "author": "BigBearCommunity",
@@ -12,6 +12,15 @@
   "main_service": "app",
   "name": "Seerr",
   "source": "casaos",
+  "volume_appdata": [
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr/config",
+      "size_bytes": 7643983,
+      "source": "/DATA/AppData/big-bear-seerr/config",
+      "status": "copied"
+    }
+  ],
   "web_ui_path": "/",
   "web_ui_port": 5056
 }

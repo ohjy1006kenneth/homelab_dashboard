@@ -1,6 +1,6 @@
 {
-  "added_at": "2026-05-31T13:14:23.138067Z",
-  "appdata_path": null,
+  "added_at": "2026-05-31T13:20:25.654136Z",
+  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/blackhole",
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/torbox-media-center",
   "appdata_status": "missing",
@@ -12,6 +12,15 @@
   "main_service": "torbox-blackhole-watcher",
   "name": "TorBox Stack",
   "source": "casaos",
+  "volume_appdata": [
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/blackhole",
+      "size_bytes": 12777492,
+      "source": "/DATA/AppData/media-stack/blackhole",
+      "status": "copied"
+    }
+  ],
   "web_ui_path": "/",
   "web_ui_port": null
 }

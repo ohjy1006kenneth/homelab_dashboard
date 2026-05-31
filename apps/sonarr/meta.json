@@ -1,6 +1,6 @@
 {
-  "added_at": "2026-05-31T13:14:22.320725Z",
-  "appdata_path": null,
+  "added_at": "2026-05-31T13:20:25.357398Z",
+  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/sonarr/config",
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/sonarr",
   "appdata_status": "missing",
@@ -12,6 +12,22 @@
   "main_service": "sonarr",
   "name": "Sonarr",
   "source": "casaos",
+  "volume_appdata": [
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/sonarr/config",
+      "size_bytes": 452519556,
+      "source": "/DATA/AppData/media-stack/sonarr/config",
+      "status": "copied"
+    },
+    {
+      "copied": true,
+      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/blackhole",
+      "size_bytes": 12777492,
+      "source": "/DATA/AppData/media-stack/blackhole",
+      "status": "copied"
+    }
+  ],
   "web_ui_path": "/",
   "web_ui_port": 8989
 }

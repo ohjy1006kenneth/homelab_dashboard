@@ -242,6 +242,111 @@ def copy_appdata(app_id: str) -> dict[str, Any]:
     }
 
 
+def copy_support_files(app_dir: Path, app_out_dir: Path) -> list[str]:
+    """Copy app-local build contexts/env files needed by compose, excluding handled files."""
+    copied: list[str] = []
+    compose_names = {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}
+    for item in app_dir.iterdir():
+        if item.name in compose_names or item.name == "icon.png":
+            continue
+        dest = app_out_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest, dirs_exist_ok=True, symlinks=True)
+            copied.append(f"{item.name}/")
+        elif item.is_file():
+            shutil.copy2(item, dest)
+            copied.append(item.name)
+    return copied
+
+
+def copy_path_to_appdata(source: Path) -> dict[str, Any]:
+    """Copy any /DATA/AppData path into project appdata preserving relative layout."""
+    try:
+        relative = source.resolve().relative_to(CASAOS_APPDATA_DIR)
+    except ValueError:
+        return {"source": str(source), "path": None, "status": "skipped", "reason": "outside CasaOS AppData"}
+    dest = DASHBOARD_APPDATA_DIR / relative
+    if not source.exists():
+        return {"source": str(source), "path": str(dest), "status": "missing", "copied": False, "reason": "not found"}
+    DASHBOARD_APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    rsync = shutil.which("rsync")
+    if source.is_dir():
+        if rsync:
+            result = subprocess.run(
+                [rsync, "-a", "--delete", f"{source}/", f"{dest}/"],
+                check=False,
+                text=True,
+                capture_output=True,
+                timeout=1800,
+            )
+            if result.returncode != 0:
+                reason = (result.stderr or result.stdout or f"rsync exited {result.returncode}").strip()
+                return {"source": str(source), "path": str(dest), "status": "partial", "copied": False, "reason": reason, "size_bytes": directory_size(dest) if dest.exists() else None}
+        else:
+            shutil.copytree(source, dest, dirs_exist_ok=True, symlinks=True)
+    else:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+    return {"source": str(source), "path": str(dest), "status": "copied", "copied": True, "size_bytes": directory_size(dest) if dest.is_dir() else dest.stat().st_size}
+
+
+def rewrite_compose_appdata_sources(compose_path: Path, app_id: str) -> list[dict[str, Any]]:
+    """Rewrite compose bind sources from /DATA/AppData to project-owned appdata."""
+    try:
+        compose = load_yaml(compose_path)
+    except Exception as exc:  # noqa: BLE001
+        return [{"source": None, "path": None, "status": "failed", "reason": f"compose parse failed: {exc}"}]
+
+    services = compose.get("services") or {}
+    if not isinstance(services, dict):
+        return []
+
+    copied: list[dict[str, Any]] = []
+    changed = False
+    seen: set[str] = set()
+
+    def migrate_source(raw: Any) -> str | None:
+        nonlocal changed
+        if not isinstance(raw, str):
+            return None
+        expanded = raw.replace("$AppID", app_id).replace("${AppID}", app_id)
+        if not expanded.startswith(str(CASAOS_APPDATA_DIR) + "/"):
+            return None
+        source = Path(expanded)
+        result = copy_path_to_appdata(source)
+        if expanded not in seen:
+            copied.append(result)
+            seen.add(expanded)
+        dest = result.get("path")
+        if dest:
+            changed = True
+            return str(dest)
+        return None
+
+    for service in services.values():
+        if not isinstance(service, dict):
+            continue
+        volumes = service.get("volumes") or []
+        if not isinstance(volumes, list):
+            continue
+        for index, volume in enumerate(volumes):
+            if isinstance(volume, dict):
+                dest = migrate_source(volume.get("source"))
+                if dest:
+                    volume["source"] = dest
+            elif isinstance(volume, str):
+                parts = volume.split(":")
+                dest = migrate_source(parts[0])
+                if dest:
+                    parts[0] = dest
+                    volumes[index] = ":".join(parts)
+
+    if changed:
+        compose_path.write_text(yaml.safe_dump(compose, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return copied
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -320,6 +425,7 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
 
     app_out_dir = DASHBOARD_APPS_DIR / app_id
     app_out_dir.mkdir(parents=True, exist_ok=True)
+    support_files = copy_support_files(app_dir, app_out_dir)
     compose_out = app_out_dir / "docker-compose.yml"
 
     resolved = get_resolved_compose(app_id)
@@ -343,6 +449,8 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
 
     icon_found = resolve_icon(app_id, app_dir, app_out_dir, casaos, service)
     appdata = copy_appdata(app_id)
+    volume_appdata = rewrite_compose_appdata_sources(compose_out, app_id)
+    primary_appdata_path = appdata.get("path") or next((item.get("path") for item in volume_appdata if item.get("path")), None)
     name = localized(casaos.get("title")) or localized(casaos.get("name")) or app_id.replace("-", " ").title()
     description = localized(casaos.get("description")) or localized(casaos.get("tagline"))
 
@@ -355,13 +463,15 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
         "icon": "icon.png" if icon_found else None,
         "web_ui_port": web_port,
         "web_ui_path": web_path,
-        "appdata_path": appdata.get("path"),
+        "appdata_path": primary_appdata_path,
         "appdata_source": appdata.get("source"),
         "appdata_status": appdata.get("status"),
         "appdata_size_bytes": appdata.get("size_bytes"),
+        "volume_appdata": volume_appdata,
         "added_at": utc_now(),
         "source": "casaos",
         "main_service": main_service_name,
+        "support_files": support_files,
     }
 
     (app_out_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
