@@ -1,9 +1,9 @@
 {
-  "added_at": "2026-05-31T11:18:55.913831Z",
+  "added_at": "2026-05-31T13:14:16.338005Z",
   "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-portainer",
-  "appdata_size_bytes": 0,
+  "appdata_size_bytes": 657138,
   "appdata_source": "/DATA/AppData/big-bear-portainer",
-  "appdata_status": "partial",
+  "appdata_status": "copied",
   "author": "BigBearTechWorld",
   "category": "BigBearCasaOS",
   "description": "Irrespective of your industry, orchestration platform, or computing device, Portainer is the most versatile container management software that simplifies your secure adoption of containers with remarkable speed.",

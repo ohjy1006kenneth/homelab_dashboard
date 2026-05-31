@@ -1,0 +1,17 @@
+{
+  "added_at": "2026-05-31T13:14:20.637297Z",
+  "appdata_path": null,
+  "appdata_size_bytes": null,
+  "appdata_source": "/DATA/AppData/prowlarr",
+  "appdata_status": "missing",
+  "author": "CasaOS Team",
+  "category": "Downloader",
+  "description": "Prowlarr is an indexer manager/proxy built on the popular *arr .net/reactjs base stack to integrate with your various PVR apps. Prowlarr supports management of both Torrent Trackers and Usenet Indexers. It integrates seamlessly with Lidarr, Mylar3, Radarr, Readarr, and Sonarr offering complete management of your indexers with no per app Indexer setup required (we do it all).",
+  "icon": "icon.png",
+  "id": "prowlarr",
+  "main_service": "prowlarr",
+  "name": "Prowlarr",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": 9696
+}

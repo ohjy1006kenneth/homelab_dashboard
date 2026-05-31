@@ -3,18 +3,17 @@
   "appdata_source_dir": "/DATA/AppData",
   "apps_dir": "/home/juyoungoh/nas/Projects/dashboard/apps",
   "database": "/home/juyoungoh/nas/Projects/dashboard/data/dashboard.db",
-  "generated_at": "2026-05-31T11:18:56.324110Z",
-  "icons_found": 4,
-  "icons_total": 6,
+  "generated_at": "2026-05-31T13:14:23.139119Z",
+  "icons_found": 10,
+  "icons_total": 12,
   "migrated_apps": [
     {
       "appdata": {
-        "copied": false,
+        "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich",
-        "reason": "rsync: [sender] opendir \"/DATA/AppData/big-bear-immich/pgdata\" failed: Permission denied (13)\nrsync error: some files/attrs were not transferred (see previous errors) (code 23) at main.c(1338) [sender=3.4.1]",
-        "size_bytes": 872453232,
+        "size_bytes": 1175687803,
         "source": "/DATA/AppData/big-bear-immich",
-        "status": "partial"
+        "status": "copied"
       },
       "icon": true,
       "id": "big-bear-immich",
@@ -24,12 +23,11 @@
     },
     {
       "appdata": {
-        "copied": false,
+        "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-pihole",
-        "reason": "rsync: [sender] send_files failed to open \"/DATA/AppData/big-bear-pihole/etc/logrotate\": Permission denied (13)\nrsync error: some files/attrs were not transferred (see previous errors) (code 23) at main.c(1338) [sender=3.4.1]",
-        "size_bytes": 17560606,
+        "size_bytes": 17561027,
         "source": "/DATA/AppData/big-bear-pihole",
-        "status": "partial"
+        "status": "copied"
       },
       "icon": true,
       "id": "big-bear-pihole",
@@ -39,12 +37,11 @@
     },
     {
       "appdata": {
-        "copied": false,
+        "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-portainer",
-        "reason": "rsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/backups\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/bin\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/certs\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/chisel\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/compose\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/docker_config\" failed: Permission denied (13)\nrsync: [sender] opendir \"/DATA/AppData/big-bear-portainer/data/tls\" failed: Permission denied (13)\nrsync: [sender] send_files failed to open \"/DATA/AppData/big-bear-portainer/data/portainer.db\": Permission denied (13)\nrsync: [sender] send_files failed to open \"/DATA/AppData/big-bear-portainer/data/portainer.key\": Permission denied (13)\nrsync: [sender] send_files failed to open \"/DATA/AppData/big-bear-portainer/data/portainer.pub\": Permission denied (13)\nrsync error: some files/attrs were not transferred (see previous errors) (code 23) at main.c(1338) [sender=3.4.1]",
-        "size_bytes": 0,
+        "size_bytes": 657138,
         "source": "/DATA/AppData/big-bear-portainer",
-        "status": "partial"
+        "status": "copied"
       },
       "icon": true,
       "id": "big-bear-portainer",
@@ -55,8 +52,22 @@
     {
       "appdata": {
         "copied": true,
+        "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr",
+        "size_bytes": 7636669,
+        "source": "/DATA/AppData/big-bear-seerr",
+        "status": "copied"
+      },
+      "icon": true,
+      "id": "big-bear-seerr",
+      "name": "Seerr",
+      "status": "migrated",
+      "web_ui_port": 5056
+    },
+    {
+      "appdata": {
+        "copied": true,
         "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-syncthing",
-        "size_bytes": 145708527,
+        "size_bytes": 142603951,
         "source": "/DATA/AppData/big-bear-syncthing",
         "status": "copied"
       },
@@ -65,6 +76,20 @@
       "name": "Syncthing",
       "status": "migrated",
       "web_ui_port": 8384
+    },
+    {
+      "appdata": {
+        "copied": false,
+        "path": null,
+        "reason": "not found",
+        "source": "/DATA/AppData/flaresolverr",
+        "status": "missing"
+      },
+      "icon": true,
+      "id": "flaresolverr",
+      "name": "FlareSolverr",
+      "status": "migrated",
+      "web_ui_port": 8191
     },
     {
       "appdata": {
@@ -85,6 +110,62 @@
         "copied": false,
         "path": null,
         "reason": "not found",
+        "source": "/DATA/AppData/jellyfin",
+        "status": "missing"
+      },
+      "icon": true,
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "status": "migrated",
+      "web_ui_port": 8097
+    },
+    {
+      "appdata": {
+        "copied": false,
+        "path": null,
+        "reason": "not found",
+        "source": "/DATA/AppData/prowlarr",
+        "status": "missing"
+      },
+      "icon": true,
+      "id": "prowlarr",
+      "name": "Prowlarr",
+      "status": "migrated",
+      "web_ui_port": 9696
+    },
+    {
+      "appdata": {
+        "copied": false,
+        "path": null,
+        "reason": "not found",
+        "source": "/DATA/AppData/radarr",
+        "status": "missing"
+      },
+      "icon": true,
+      "id": "radarr",
+      "name": "Radarr",
+      "status": "migrated",
+      "web_ui_port": 7878
+    },
+    {
+      "appdata": {
+        "copied": false,
+        "path": null,
+        "reason": "not found",
+        "source": "/DATA/AppData/sonarr",
+        "status": "missing"
+      },
+      "icon": true,
+      "id": "sonarr",
+      "name": "Sonarr",
+      "status": "migrated",
+      "web_ui_port": 8989
+    },
+    {
+      "appdata": {
+        "copied": false,
+        "path": null,
+        "reason": "not found",
         "source": "/DATA/AppData/torbox-media-center",
         "status": "missing"
       },
@@ -95,39 +176,8 @@
       "web_ui_port": null
     }
   ],
-  "migrated_count": 6,
-  "skipped_apps": [
-    {
-      "id": "big-bear-seerr",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/big-bear-seerr/docker-compose.yml'",
-      "status": "skipped"
-    },
-    {
-      "id": "flaresolverr",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/flaresolverr/docker-compose.yml'",
-      "status": "skipped"
-    },
-    {
-      "id": "jellyfin",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/jellyfin/docker-compose.yml'",
-      "status": "skipped"
-    },
-    {
-      "id": "prowlarr",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/prowlarr/docker-compose.yml'",
-      "status": "skipped"
-    },
-    {
-      "id": "radarr",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/radarr/docker-compose.yml'",
-      "status": "skipped"
-    },
-    {
-      "id": "sonarr",
-      "reason": "[Errno 13] Permission denied: '/var/lib/casaos/apps/sonarr/docker-compose.yml'",
-      "status": "skipped"
-    }
-  ],
-  "skipped_count": 6,
+  "migrated_count": 12,
+  "skipped_apps": [],
+  "skipped_count": 0,
   "source_dir": "/var/lib/casaos/apps"
 }

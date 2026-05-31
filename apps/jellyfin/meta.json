@@ -1,0 +1,17 @@
+{
+  "added_at": "2026-05-31T13:14:19.879143Z",
+  "appdata_path": null,
+  "appdata_size_bytes": null,
+  "appdata_source": "/DATA/AppData/jellyfin",
+  "appdata_status": "missing",
+  "author": "CasaOS Team",
+  "category": "Media",
+  "description": "Jellyfin hebt sich unter den Medienserver-Anwendungen durch sein vollst\u00e4ndig Open-Source, kostenloses und datenschutzorientiertes Design hervor. Im Gegensatz zu Emby und Plex bietet Jellyfin robustes Medienmanagement, Echtzeit-Transkodierung und granulare Multi-User-Berechtigungen ohne Abonnementkosten. Es funktioniert unabh\u00e4ngig von Cloud-Diensten, um dem Benutzer die volle Kontrolle \u00fcber seine Daten zu gew\u00e4hrleisten. Seine community-getriebene Entwicklung und effiziente Ressourcennutzung erm\u00f6glichen eine reibungslose Leistung auf Low-End-Ger\u00e4ten, was es zur bevorzugten Wahl f\u00fcr datenschutzbewusste und budgetbewusste Benutzer macht.\n\nStellen Sie sich vor, Ihre Filme, Fernsehsendungen und Musik sind jederzeit griffbereit und auf jedem Ger\u00e4t zug\u00e4nglich. Jellyfin verwandelt Ihre Mediensammlung in ein personalisiertes Unterhaltungszentrum, das traditionelle Fotoalben mit einem nahtlosen Browsing- und Wiedergabeerlebnis \u00fcbertrifft.\nJellyfin bietet hochwertiges Streaming, automatisches Abrufen von Metadaten und personalisierte Empfehlungen, alles kostenlos. Es unterst\u00fctzt mehrere Benutzer, jeder mit seiner eigenen Medienbibliothek, und erf\u00fcllt die vielf\u00e4ltigen Bed\u00fcrfnisse von Familien oder Teams.\nDie Bereitstellung von Jellyfin auf privaten Cloud-Ger\u00e4ten wie Zima bietet nahezu unbegrenzten Speicher, reibungsloses Streaming und sicheren Zugriff von mehreren Ger\u00e4ten. F\u00fcr NAS-Enthusiasten oder alle, die ihr Heim-Medien-Setup verbessern m\u00f6chten, ist Jellyfin die perfekte L\u00f6sung.",
+  "icon": "icon.png",
+  "id": "jellyfin",
+  "main_service": "jellyfin",
+  "name": "Jellyfin",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": 8097
+}

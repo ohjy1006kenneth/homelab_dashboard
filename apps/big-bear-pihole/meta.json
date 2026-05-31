@@ -1,9 +1,9 @@
 {
-  "added_at": "2026-05-31T11:18:55.648945Z",
+  "added_at": "2026-05-31T13:14:15.882275Z",
   "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-pihole",
-  "appdata_size_bytes": 17560606,
+  "appdata_size_bytes": 17561027,
   "appdata_source": "/DATA/AppData/big-bear-pihole",
-  "appdata_status": "partial",
+  "appdata_status": "copied",
   "author": "BigBearTechWorld",
   "category": "BigBearCasaOS",
   "description": "The Pi-hole\u00ae is a DNS sinkhole that protects your devices from unwanted content without installing any client-side software.",

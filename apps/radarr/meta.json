@@ -1,0 +1,17 @@
+{
+  "added_at": "2026-05-31T13:14:21.314818Z",
+  "appdata_path": null,
+  "appdata_size_bytes": null,
+  "appdata_source": "/DATA/AppData/radarr",
+  "appdata_status": "missing",
+  "author": "CasaOS Team",
+  "category": "Media",
+  "description": "Radarr is a movie collection manager for Usenet and BitTorrent users. It can monitor multiple RSS feeds for new movies and will interface with clients and indexers to grab, sort, and rename them. It can also be configured to automatically upgrade the quality of existing files in the library when a better quality format becomes available. Note that only one type of a given movie is supported. If you want both an 4k version and 1080p version of a given movie you will need multiple instances.",
+  "icon": "icon.png",
+  "id": "radarr",
+  "main_service": "radarr",
+  "name": "Radarr",
+  "source": "casaos",
+  "web_ui_path": "/",
+  "web_ui_port": 7878
+}
