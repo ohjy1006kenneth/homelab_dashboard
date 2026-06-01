@@ -106,3 +106,35 @@ input[type='search']:focus { border-color: #444; }
   .detail-grid { grid-template-columns: 1fr; }
   .app-actions { grid-column: 1 / -1; }
 }
+
+.manager-hero { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.manager-head { align-items: flex-start; }
+.manager-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+select { background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; outline: none; }
+select:focus { border-color: #444; }
+.hint-row { color: var(--text-muted); font: 12px var(--font-mono); margin: -4px 0 14px; }
+.manager-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+.app-card-manager { grid-template-columns: 44px minmax(0, 1fr); align-items: flex-start; }
+.app-card-manager .app-actions { grid-column: 2; flex-wrap: wrap; }
+.button { background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button.button { font-family: inherit; }
+.tab-row { display: flex; gap: 6px; border-bottom: 1px solid var(--border); }
+.tab-button { appearance: none; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--text-secondary); padding: 10px 12px; cursor: pointer; font: 12px var(--font-mono); }
+.tab-button.active, .tab-button:hover { color: var(--text-primary); border-bottom-color: var(--accent); }
+.tab-panel { display: grid; gap: 10px; }
+.tab-panel[hidden] { display: none; }
+.log-viewer { min-height: 260px; max-height: 42vh; overflow: auto; margin: 0; background: #050505; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; color: #cfcfcf; font: 11px/1.55 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
+.placeholder-panel { min-height: 280px; display: grid; align-content: center; gap: 10px; }
+.placeholder-copy { color: var(--text-secondary); }
+@media (max-width: 980px) {
+  .manager-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manager-head { flex-direction: column; align-items: stretch; }
+  .manager-filters { justify-content: stretch; }
+  .manager-filters > * { flex: 1 1 180px; }
+}
+@media (max-width: 520px) {
+  .manager-hero { grid-template-columns: 1fr; }
+  .manager-grid { grid-template-columns: 1fr; }
+  .app-card-manager { grid-template-columns: 44px 1fr; }
+  .app-card-manager .app-actions { grid-column: 1 / -1; }
+}

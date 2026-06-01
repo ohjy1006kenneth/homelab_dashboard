@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import yaml
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, RedirectResponse
 
@@ -153,6 +153,23 @@ def get_compose(app_id: str) -> dict[str, str]:
     row = _app_row(app_id)
     path = _compose_file(row)
     return {"app_id": app_id, "path": str(path), "content": path.read_text(encoding="utf-8")}
+
+
+@router.get("/{app_id}/logs")
+def get_logs(app_id: str, tail: int = Query(default=160, ge=20, le=1000)) -> dict[str, str | bool | int]:
+    row = _app_row(app_id)
+    compose_path = row["compose_path"]
+    if not compose_path or not Path(compose_path).exists():
+        raise HTTPException(status_code=404, detail="Compose file not found")
+    result = subprocess.run(
+        ["docker", "compose", "-f", compose_path, "logs", "--no-color", f"--tail={tail}"],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=20,
+    )
+    output = (result.stdout + result.stderr).strip()
+    return {"ok": result.returncode == 0, "tail": tail, "output": output}
 
 
 @router.put("/{app_id}/compose")
