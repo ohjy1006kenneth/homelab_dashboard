@@ -138,3 +138,32 @@ button.button { font-family: inherit; }
   .app-card-manager { grid-template-columns: 44px 1fr; }
   .app-card-manager .app-actions { grid-column: 1 / -1; }
 }
+
+.dot + .dot { margin-left: -3px; }
+.detail-card.wide { grid-column: 1 / -1; }
+.button.danger { color: #fca5a5; border-color: rgba(239,68,68,.35); }
+.button.danger:hover { color: #fecaca; border-color: rgba(239,68,68,.75); }
+.empty.compact { padding: 12px; text-align: left; }
+.ops-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ops-card { background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px; display: grid; gap: 10px; align-content: start; }
+.ops-card h3 { font-size: 13px; }
+.ops-card p { color: var(--text-secondary); font: 12px/1.5 var(--font-mono); }
+.ports-list, .backup-list { display: grid; gap: 8px; }
+.port-row, .backup-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; color: var(--text-secondary); font: 12px var(--font-mono); border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: 8px; }
+.backup-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+.backup-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.port-row strong { color: var(--text-primary); }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.add-form { display: grid; gap: 12px; }
+.add-form label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+.add-form input, .add-form textarea { background: #050505; color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; font: 12px/1.5 var(--font-mono); outline: none; }
+.add-form input:focus, .add-form textarea:focus { border-color: #444; }
+.small-textarea { min-height: 72px; resize: vertical; }
+#new-compose { min-height: 260px; resize: vertical; }
+@media (max-width: 980px) {
+  .ops-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .backup-row, .port-row { grid-template-columns: 1fr; }
+}
