@@ -1,0 +1,20 @@
+[Unit]
+Description=lab.local Homelab Dashboard (user service)
+Documentation=file:%h/nas/Projects/dashboard/SPEC.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/nas/Projects/dashboard
+Environment=PYTHONUNBUFFERED=1
+# The user systemd manager may not include newly-added supplementary groups until logout/reboot.
+# Run under the docker primary group so app status/logs/stats can access /var/run/docker.sock.
+ExecStart=/usr/bin/sg docker -c 'exec %h/nas/Projects/dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765'
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

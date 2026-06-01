@@ -108,20 +108,29 @@ def stream_metrics() -> StreamingResponse:
     return StreamingResponse(_metric_events(), media_type="text/event-stream")
 
 
+def _service_state(command: list[str]) -> str:
+    result = subprocess.run(command, text=True, capture_output=True, check=False, timeout=5)
+    return result.stdout.strip() or result.stderr.strip() or "unknown"
+
+
 @router.get("/ops")
 def ops_status() -> dict:
-    service = subprocess.run(["systemctl", "is-active", "lab-dashboard.service"], text=True, capture_output=True, check=False, timeout=5)
+    user_service_state = _service_state(["systemctl", "--user", "is-active", "lab-dashboard.service"])
+    system_service_state = _service_state(["systemctl", "is-active", "lab-dashboard.service"])
     watchdog = {"available": WATCHDOG.exists(), "ok": None, "output": ""}
     if WATCHDOG.exists():
         result = subprocess.run(["python3", str(WATCHDOG)], text=True, capture_output=True, check=False, timeout=60, cwd=PROJECT_DIR)
         watchdog = {"available": True, "ok": result.returncode == 0 and not result.stdout.strip(), "output": (result.stdout + result.stderr).strip()[:4000]}
-    service_state = service.stdout.strip() or service.stderr.strip() or "unknown"
+
+    service_state = "active" if user_service_state == "active" or system_service_state == "active" else system_service_state
     if service_state != "active":
         live = subprocess.run(["pgrep", "-f", "uvicorn backend.main:app.*--port 8765"], text=True, capture_output=True, check=False, timeout=5)
         if live.stdout.strip():
             service_state = "manual"
     return {
         "dashboard_service": service_state,
+        "user_service": user_service_state,
+        "system_service": system_service_state,
         "watchdog": watchdog,
         "checked_at": time.time(),
     }
