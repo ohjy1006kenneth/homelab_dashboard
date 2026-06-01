@@ -6,9 +6,9 @@ from pathlib import Path
 from urllib.parse import quote
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from backend.database import PROJECT_DIR, get_connection, rows_to_dicts
 
@@ -74,16 +74,44 @@ def _compose_file(row: sqlite3.Row) -> Path:
     return path
 
 
-def _serialize_app(row: sqlite3.Row, include_services: bool = False) -> dict:
+def _request_hostname(request: Request | None) -> str:
+    """Return the hostname the browser used to reach the dashboard.
+
+    App web UIs run on sibling ports of the dashboard host. Hard-coding
+    lab.local breaks for users who open the dashboard by LAN IP, Tailscale IP,
+    or another DNS name, so generate links from the incoming request host.
+    """
+    if request is None:
+        return "lab.local"
+    forwarded_host = request.headers.get("x-forwarded-host")
+    host = (forwarded_host or request.headers.get("host") or request.url.hostname or "lab.local").split(",", 1)[0]
+    hostname = host.rsplit(":", 1)[0] if host.count(":") <= 1 else request.url.hostname
+    return hostname if hostname and hostname not in {"0.0.0.0", "::"} else "lab.local"
+
+
+def _web_ui_path(path: str | None) -> str:
+    if not path:
+        return "/"
+    return path if path.startswith("/") else f"/{path}"
+
+
+def _web_ui_url(row: sqlite3.Row | dict, request: Request | None = None) -> str | None:
+    app = dict(row)
+    port = app.get("web_ui_port")
+    if not port:
+        return None
+    return f"http://{_request_hostname(request)}:{port}{_web_ui_path(app.get('web_ui_path'))}"
+
+
+def _serialize_app(row: sqlite3.Row, include_services: bool = False, request: Request | None = None) -> dict:
     app = dict(row)
     app_id = app["id"]
-    port = app.get("web_ui_port")
-    web_path = app.get("web_ui_path") or "/"
     app.update(
         {
             "icon_url": f"/api/apps/{quote(app_id)}/icon" if app.get("icon_path") else None,
             "status": _compose_status(app.get("compose_path")),
-            "web_ui_url": f"http://lab.local:{port}{web_path}" if port else None,
+            "web_ui_url": _web_ui_url(row, request),
+            "open_url": f"/api/apps/{quote(app_id)}/open" if app.get("web_ui_port") else None,
         }
     )
     if include_services:
@@ -92,15 +120,24 @@ def _serialize_app(row: sqlite3.Row, include_services: bool = False) -> dict:
 
 
 @router.get("")
-def list_apps() -> list[dict]:
+def list_apps(request: Request) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM app WHERE enabled = 1 ORDER BY name COLLATE NOCASE").fetchall()
-    return [_serialize_app(row) for row in rows]
+    return [_serialize_app(row, request=request) for row in rows]
 
 
 @router.get("/{app_id}")
-def get_app(app_id: str) -> dict:
-    return _serialize_app(_app_row(app_id), include_services=True)
+def get_app(app_id: str, request: Request) -> dict:
+    return _serialize_app(_app_row(app_id), include_services=True, request=request)
+
+
+@router.get("/{app_id}/open")
+def open_app(app_id: str, request: Request) -> RedirectResponse:
+    row = _app_row(app_id)
+    target = _web_ui_url(row, request)
+    if not target:
+        raise HTTPException(status_code=404, detail="App has no web UI")
+    return RedirectResponse(target, status_code=302)
 
 
 @router.get("/{app_id}/icon")

@@ -47,6 +47,10 @@ function fallbackInitial(name) {
   return escapeHtml((name || '?').trim().slice(0, 1).toUpperCase());
 }
 
+function openHref(app) {
+  return app.open_url || app.web_ui_url;
+}
+
 function renderApps() {
   const query = searchEl.value.trim().toLowerCase();
   const visible = apps.filter((app) => `${app.name} ${app.description || ''} ${app.category || ''}`.toLowerCase().includes(query));
@@ -59,7 +63,8 @@ function renderApps() {
     const icon = app.icon_url
       ? `<img src="${app.icon_url}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'app-fallback', textContent:'${initial}'}))" />`
       : `<div class="app-fallback">${initial}</div>`;
-    const open = app.web_ui_url ? `<a class="button" href="${app.web_ui_url}" target="_blank" rel="noreferrer">Open</a>` : '<span class="button disabled">No UI</span>';
+    const href = openHref(app);
+    const open = href ? `<a class="button" href="${href}" target="_blank" rel="noreferrer">Open</a>` : '<span class="button disabled">No UI</span>';
     return `<article class="app-card">
       <div class="app-icon">${icon}</div>
       <button class="app-main app-select" data-app-id="${escapeHtml(app.id)}">
@@ -91,7 +96,7 @@ async function openApp(appId) {
         <div class="detail-card"><span>Compose</span><strong>${escapeHtml(compose.path)}</strong></div>
       </div>
       <div class="modal-actions">
-        ${selectedApp.web_ui_url ? `<a class="button" href="${selectedApp.web_ui_url}" target="_blank" rel="noreferrer">Open web UI</a>` : ''}
+        ${openHref(selectedApp) ? `<a class="button" href="${openHref(selectedApp)}" target="_blank" rel="noreferrer">Open web UI</a>` : ''}
         <button class="button" data-compose-action="start">Start</button>
         <button class="button" data-compose-action="stop">Stop</button>
         <button class="button" data-compose-action="restart">Restart</button>
