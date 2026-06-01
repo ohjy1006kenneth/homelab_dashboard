@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Iterator
 
 import psutil
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 BOOT_TIME = psutil.boot_time()
 NET_BASELINE = psutil.net_io_counters()
 NET_BASELINE_AT = time.time()
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+WATCHDOG = Path("/home/juyoungoh/.hermes/profiles/dashcraft/scripts/dashboard_watchdog.py")
 
 
 def _cpu_temp_c() -> float | None:
@@ -53,8 +58,7 @@ def _disk_usage(path: str) -> dict[str, str | float | bool]:
     }
 
 
-@router.get("")
-def get_metrics() -> dict:
+def current_metrics() -> dict:
     vm = psutil.virtual_memory()
     swap = psutil.swap_memory()
     root_disk = shutil.disk_usage("/")
@@ -85,4 +89,39 @@ def get_metrics() -> dict:
             "avg_recv_kbps": round(((net.bytes_recv - NET_BASELINE.bytes_recv) / elapsed) / 1024, 1),
         },
         "docker": docker,
+    }
+
+
+@router.get("")
+def get_metrics() -> dict:
+    return current_metrics()
+
+
+def _metric_events() -> Iterator[str]:
+    while True:
+        yield f"data: {json.dumps(current_metrics())}\n\n"
+        time.sleep(3)
+
+
+@router.get("/stream")
+def stream_metrics() -> StreamingResponse:
+    return StreamingResponse(_metric_events(), media_type="text/event-stream")
+
+
+@router.get("/ops")
+def ops_status() -> dict:
+    service = subprocess.run(["systemctl", "is-active", "lab-dashboard.service"], text=True, capture_output=True, check=False, timeout=5)
+    watchdog = {"available": WATCHDOG.exists(), "ok": None, "output": ""}
+    if WATCHDOG.exists():
+        result = subprocess.run(["python3", str(WATCHDOG)], text=True, capture_output=True, check=False, timeout=60, cwd=PROJECT_DIR)
+        watchdog = {"available": True, "ok": result.returncode == 0 and not result.stdout.strip(), "output": (result.stdout + result.stderr).strip()[:4000]}
+    service_state = service.stdout.strip() or service.stderr.strip() or "unknown"
+    if service_state != "active":
+        live = subprocess.run(["pgrep", "-f", "uvicorn backend.main:app.*--port 8765"], text=True, capture_output=True, check=False, timeout=5)
+        if live.stdout.strip():
+            service_state = "manual"
+    return {
+        "dashboard_service": service_state,
+        "watchdog": watchdog,
+        "checked_at": time.time(),
     }

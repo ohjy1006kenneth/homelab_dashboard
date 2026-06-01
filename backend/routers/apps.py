@@ -404,11 +404,34 @@ def update_compose(app_id: str, payload: ComposeUpdate) -> dict[str, str | bool 
     return {"ok": True, "path": str(path), "backup": backup}
 
 
-def _run_compose(app_id: str, args: list[str]) -> dict[str, str | bool]:
+def _container_ids(compose_path: str) -> list[str]:
+    result = subprocess.run(
+        ["docker", "compose", "-f", compose_path, "ps", "-q"],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=8,
+    )
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _run_compose(app_id: str, args: list[str]) -> dict[str, str | bool | list[dict]]:
     row = _app_row(app_id)
     compose_path = row["compose_path"]
     if not compose_path or not Path(compose_path).exists():
         raise HTTPException(status_code=404, detail="Compose file not found")
+    if args and args[0] == "up":
+        compose = _read_compose(compose_path)
+        action_ports: list[int] = []
+        if row["web_ui_port"]:
+            action_ports.append(int(row["web_ui_port"]))
+        action_ports.extend(_compose_ports(compose))
+        conflicts = [_port_report(port, app_id) for port in sorted(set(action_ports))]
+        hard_conflicts = [item for item in conflicts if item["conflict"]]
+        if hard_conflicts:
+            raise HTTPException(status_code=409, detail={"message": "Port conflicts detected", "ports": hard_conflicts})
     result = subprocess.run(
         ["docker", "compose", "-f", compose_path, *args],
         check=False,
@@ -419,18 +442,55 @@ def _run_compose(app_id: str, args: list[str]) -> dict[str, str | bool]:
     return {"ok": result.returncode == 0, "output": (result.stdout + result.stderr).strip()}
 
 
+@router.get("/{app_id}/stats")
+def get_stats(app_id: str) -> dict:
+    row = _app_row(app_id)
+    compose_path = row["compose_path"]
+    if not compose_path or not Path(compose_path).exists():
+        raise HTTPException(status_code=404, detail="Compose file not found")
+    ids = _container_ids(compose_path)
+    if not ids:
+        return {"app_id": app_id, "containers": []}
+    result = subprocess.run(
+        ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ids],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=12,
+    )
+    containers = []
+    for line in result.stdout.splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        containers.append(
+            {
+                "name": item.get("Name"),
+                "container": item.get("Container"),
+                "cpu": item.get("CPUPerc"),
+                "memory": item.get("MemUsage"),
+                "memory_pct": item.get("MemPerc"),
+                "network": item.get("NetIO"),
+                "block_io": item.get("BlockIO"),
+                "pids": item.get("PIDs"),
+            }
+        )
+    return {"app_id": app_id, "ok": result.returncode == 0, "containers": containers, "error": result.stderr.strip()}
+
+
 @router.post("/{app_id}/start")
-def start_app(app_id: str) -> dict[str, str | bool]:
+def start_app(app_id: str) -> dict:
     return _run_compose(app_id, ["up", "-d"])
 
 
 @router.post("/{app_id}/stop")
-def stop_app(app_id: str) -> dict[str, str | bool]:
+def stop_app(app_id: str) -> dict:
     return _run_compose(app_id, ["down"])
 
 
 @router.post("/{app_id}/restart")
-def restart_app(app_id: str) -> dict[str, str | bool]:
+def restart_app(app_id: str) -> dict:
     return _run_compose(app_id, ["restart"])
 
 

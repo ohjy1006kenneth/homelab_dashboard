@@ -8,6 +8,11 @@ const navLinks = [...document.querySelectorAll('nav a')];
 let apps = [];
 let metrics = null;
 let selectedApp = null;
+let agents = [];
+let newsletters = [];
+let newsletterSources = [];
+let settings = null;
+let ops = null;
 let currentRoute = routeFromHash();
 
 async function api(path, options) {
@@ -30,7 +35,7 @@ function escapeHtml(value = '') {
 
 function routeFromHash() {
   const route = (window.location.hash || '#overview').replace('#', '') || 'overview';
-  return ['overview', 'apps', 'agents', 'news', 'stocks'].includes(route) ? route : 'overview';
+  return ['overview', 'apps', 'agents', 'news', 'stocks', 'settings'].includes(route) ? route : 'overview';
 }
 
 function setStatus(text, state = '') {
@@ -128,11 +133,13 @@ function appCard(app, mode = 'overview') {
 
 function updateNav() {
   navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${currentRoute}`));
-  titleEl.textContent = ({ overview: 'Overview', apps: 'Apps', agents: 'Agents', news: 'Newsletters', stocks: 'Stocks' })[currentRoute];
+  titleEl.textContent = ({ overview: 'Overview', apps: 'Apps', agents: 'Agents', news: 'Newsletters', stocks: 'Stocks', settings: 'Settings' })[currentRoute];
 }
 
 function renderOverview() {
-  contentEl.innerHTML = `<div id="metrics" class="metrics-grid">${metricsHtml(metrics, true)}</div>
+  const watchdog = ops?.watchdog;
+  const opsCard = metricCard('Watchdog', watchdog?.ok ? 'OK' : watchdog?.available ? 'Alert' : 'n/a', ops?.dashboard_service ? `service ${ops.dashboard_service}` : 'not checked');
+  contentEl.innerHTML = `<div id="metrics" class="metrics-grid">${metricsHtml(metrics, true)}${opsCard}</div>
     <section class="panel">
       <div class="panel-head">
         <div>
@@ -201,12 +208,49 @@ function renderAppsPage() {
   draw();
 }
 
+function renderAgentsPage() {
+  contentEl.innerHTML = `<section class="panel">
+    <div class="panel-head manager-head"><div><p class="eyebrow">Agents</p><h2>Runnable maintenance agents</h2></div><button class="button secondary" data-refresh-agents="true">Refresh</button></div>
+    <div class="table-list">${agents.map((agent) => `<article class="table-row"><div><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.description || agent.id)}</small></div><span class="badge">${escapeHtml(agent.status || 'idle')}</span><span>${escapeHtml(agent.schedule || 'manual')}</span><button class="button" data-agent-id="${escapeHtml(agent.id)}" data-agent-action="run">Run</button><button class="button secondary" data-agent-id="${escapeHtml(agent.id)}" data-agent-action="history">History</button><button class="button danger" data-agent-id="${escapeHtml(agent.id)}" data-agent-action="stop">Stop</button></article>`).join('') || '<div class="empty">No agents configured.</div>'}</div>
+    <pre id="agent-output" class="log-viewer small-log">Select History or Run an agent to see output.</pre>
+  </section>`;
+}
+
+function renderNewsPage() {
+  const tabs = ['All', ...newsletterSources.map((s) => s.name)];
+  contentEl.innerHTML = `<section class="panel">
+    <div class="panel-head manager-head"><div><p class="eyebrow">Newsletters</p><h2>RSS briefings</h2></div><div class="manager-filters"><button class="button primary" data-fetch-news="true">Fetch Now</button><button class="button secondary" data-refresh-news="true">Refresh</button></div></div>
+    <div class="tab-row news-tabs">${tabs.map((source) => `<button class="tab-button active" data-news-source="${escapeHtml(source === 'All' ? '' : source)}">${escapeHtml(source)}</button>`).join('')}</div>
+    <div id="news-list" class="news-list">${newsItemsHtml(newsletters)}</div>
+  </section>`;
+}
+
+function newsItemsHtml(items) {
+  return items.length ? items.map((item) => `<article class="news-card ${item.read ? 'is-read' : ''}"><div><span class="badge">${escapeHtml(item.source)}</span><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></div><p>${escapeHtml(item.summary || '')}</p><footer><small>${escapeHtml(item.published_at || '')}</small><button class="button secondary" data-news-id="${escapeHtml(item.id)}">Mark read</button></footer></article>`).join('') : '<div class="empty">No newsletter items yet. Click Fetch Now.</div>';
+}
+
+function renderStocksPage() {
+  const symbols = settings?.stocks || [];
+  const tvSymbols = encodeURIComponent(JSON.stringify(symbols.map((s) => [s, s])));
+  contentEl.innerHTML = `<section class="panel"><div class="panel-head"><div><p class="eyebrow">Stocks</p><h2>Watchlist</h2></div><a class="button secondary" href="#settings">Edit tickers</a></div>
+    <iframe class="stock-widget" src="https://s.tradingview.com/embed-widget/market-quotes/?locale=en#%7B%22symbolsGroups%22%3A%5B%7B%22name%22%3A%22Watchlist%22%2C%22symbols%22%3A${tvSymbols}%7D%5D%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Atrue%7D"></iframe>
+    <div class="stock-grid">${symbols.map((symbol) => `<article class="metric-card"><span>${escapeHtml(symbol.split(':')[0])}</span><strong>${escapeHtml(symbol.split(':').pop())}</strong><small>TradingView symbol</small></article>`).join('')}</div>
+  </section>`;
+}
+
+function renderSettingsPage() {
+  const stockText = (settings?.stocks || []).join('\n');
+  contentEl.innerHTML = `<section class="panel"><div class="panel-head"><div><p class="eyebrow">Settings</p><h2>Dashboard config</h2></div></div>
+    <form id="settings-form" class="add-form"><div class="form-grid"><label>Title<input name="title" value="${escapeHtml(settings?.title || 'lab.local')}" /></label><label>Accent<input name="accent" value="${escapeHtml(settings?.accent || '#ffffff')}" /></label></div><label>Stock symbols<textarea name="stocks" class="small-textarea">${escapeHtml(stockText)}</textarea></label><div class="modal-message">One TradingView symbol per line, e.g. NASDAQ:NVDA.</div><div class="modal-actions"><button class="button primary" type="submit">Save settings</button></div></form>
+  </section>`;
+}
+
 function renderPlaceholder(route) {
   const labels = { agents: 'Agents', news: 'Newsletters', stocks: 'Stocks' };
   contentEl.innerHTML = `<section class="panel placeholder-panel">
     <p class="eyebrow">Coming next</p>
     <h2>${labels[route]}</h2>
-    <p class="placeholder-copy">Phase 1/2 app operations are being filled out first. This module comes after the CasaOS replacement workflow is solid.</p>
+    <p class="placeholder-copy">This module has not loaded yet. Try refreshing.</p>
   </section>`;
 }
 
@@ -214,6 +258,10 @@ function render() {
   updateNav();
   if (currentRoute === 'overview') renderOverview();
   else if (currentRoute === 'apps') renderAppsPage();
+  else if (currentRoute === 'agents') renderAgentsPage();
+  else if (currentRoute === 'news') renderNewsPage();
+  else if (currentRoute === 'stocks') renderStocksPage();
+  else if (currentRoute === 'settings') renderSettingsPage();
   else renderPlaceholder(currentRoute);
 }
 
@@ -227,11 +275,17 @@ function backupsHtml(backups = []) {
   return `<div class="backup-list">${backups.slice(0, 8).map((backup) => `<div class="backup-row"><span>${escapeHtml(backup.backup_id)}</span><small>${Math.round((backup.bytes || 0) / 1024)} KB</small><button class="button secondary" data-restore-backup="${escapeHtml(backup.backup_id)}">Restore</button></div>`).join('')}</div>`;
 }
 
+function statsHtml(containers = []) {
+  if (!containers.length) return '<div class="empty compact">No running container stats.</div>';
+  return `<div class="ports-list">${containers.map((container) => `<div class="port-row"><span>${escapeHtml(container.name || container.container || 'container')}</span><strong>${escapeHtml(container.cpu || '—')}</strong><small>${escapeHtml(container.memory || '')} · ${escapeHtml(container.network || '')}</small></div>`).join('')}</div>`;
+}
+
 async function openApp(appId, initialTab = 'compose') {
   selectedApp = await api(`/api/apps/${encodeURIComponent(appId)}`);
-  const [compose, logs] = await Promise.all([
+  const [compose, logs, stats] = await Promise.all([
     api(`/api/apps/${encodeURIComponent(appId)}/compose`),
     api(`/api/apps/${encodeURIComponent(appId)}/logs?tail=160`).catch((error) => ({ ok: false, output: error.message })),
+    api(`/api/apps/${encodeURIComponent(appId)}/stats`).catch(() => ({ containers: [] })),
   ]);
   modalEl.innerHTML = `<div class="modal-backdrop" data-close="true"></div>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(selectedApp.name)} manager">
@@ -280,6 +334,7 @@ async function openApp(appId, initialTab = 'compose') {
       <section class="tab-panel" data-tab-panel="ops">
         <div class="ops-grid">
           <article class="ops-card"><h3>Ports</h3>${portsHtml(selectedApp.ports)}</article>
+          <article class="ops-card"><h3>Container stats</h3>${statsHtml(stats.containers)}</article>
           <article class="ops-card"><h3>Compose backups</h3><div id="backup-list">${backupsHtml(selectedApp.backups)}</div></article>
           <article class="ops-card"><h3>Health check</h3><p>${escapeHtml(selectedApp.health?.error || healthLabel(selectedApp))}</p><button class="button secondary" data-refresh-health="true">Recheck health</button></article>
         </div>
@@ -439,11 +494,52 @@ async function submitAddApp(form) {
   }
 }
 
+async function runAgentAction(agentId, action) {
+  const out = document.querySelector('#agent-output');
+  if (out) out.textContent = `${action} ${agentId}…`;
+  if (action === 'history') {
+    const data = await api(`/api/agents/${encodeURIComponent(agentId)}/history`);
+    if (out) out.textContent = data.runs.length ? data.runs.map((run) => `[${run.status}] ${run.started_at}\n${run.summary_line || ''}\n${run.log_tail || ''}`).join('\n\n---\n\n') : 'No history yet.';
+    return;
+  }
+  await api(`/api/agents/${encodeURIComponent(agentId)}/${action}`, { method: 'POST' });
+  agents = await api('/api/agents');
+  render();
+}
+
+async function refreshNews(source = '') {
+  newsletters = await api(`/api/newsletters${source ? `?source=${encodeURIComponent(source)}` : ''}`);
+  const list = document.querySelector('#news-list');
+  if (list) list.innerHTML = newsItemsHtml(newsletters);
+}
+
+async function saveSettings(form) {
+  const data = Object.fromEntries(new FormData(form).entries());
+  const payload = { title: data.title, accent: data.accent, stocks: String(data.stocks || '').split(/\n|,/).map((s) => s.trim()).filter(Boolean) };
+  const result = await api('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  settings = result.settings;
+  setStatus('Settings saved', 'ok');
+  render();
+}
+
 async function load() {
   try {
-    const [nextMetrics, appRows] = await Promise.all([api('/api/metrics'), api('/api/apps?health=true')]);
+    const [nextMetrics, appRows, agentRows, sourceRows, settingRows, opsRows, newsRows] = await Promise.all([
+      api('/api/metrics'),
+      api('/api/apps?health=true'),
+      api('/api/agents').catch(() => []),
+      api('/api/newsletters/sources').catch(() => []),
+      api('/api/settings').catch(() => ({ stocks: [] })),
+      api('/api/metrics/ops').catch(() => null),
+      api('/api/newsletters').catch(() => []),
+    ]);
     metrics = nextMetrics;
     apps = appRows;
+    agents = agentRows;
+    newsletterSources = sourceRows;
+    settings = settingRows;
+    ops = opsRows;
+    newsletters = newsRows;
     uptimeEl.textContent = `Pi uptime ${metrics.uptime_hours}h`;
     setStatus('Live', 'ok');
     render();
@@ -457,6 +553,35 @@ contentEl.addEventListener('click', (event) => {
   const refresh = event.target.closest('[data-refresh-apps]');
   const add = event.target.closest('[data-add-app]');
   if (refresh || add) return;
+  const agentButton = event.target.closest('[data-agent-id]');
+  if (agentButton) {
+    runAgentAction(agentButton.dataset.agentId, agentButton.dataset.agentAction).catch((error) => alert(error.message));
+    return;
+  }
+  if (event.target.closest('[data-refresh-agents]')) {
+    api('/api/agents').then((rows) => { agents = rows; render(); });
+    return;
+  }
+  if (event.target.closest('[data-fetch-news]')) {
+    setStatus('Fetching RSS…');
+    api('/api/newsletters/fetch', { method: 'POST' }).then(() => refreshNews()).then(() => setStatus('Live', 'ok')).catch((error) => setStatus(`News error: ${error.message}`, 'error'));
+    return;
+  }
+  if (event.target.closest('[data-refresh-news]')) {
+    refreshNews().catch((error) => alert(error.message));
+    return;
+  }
+  const newsSource = event.target.closest('[data-news-source]');
+  if (newsSource) {
+    document.querySelectorAll('[data-news-source]').forEach((b) => b.classList.toggle('active', b === newsSource));
+    refreshNews(newsSource.dataset.newsSource).catch((error) => alert(error.message));
+    return;
+  }
+  const newsItem = event.target.closest('[data-news-id]');
+  if (newsItem) {
+    api(`/api/newsletters/${encodeURIComponent(newsItem.dataset.newsId)}/read`, { method: 'POST' }).then(() => refreshNews()).catch((error) => alert(error.message));
+    return;
+  }
   const target = event.target.closest('[data-app-id]');
   if (!target) return;
   const action = target.dataset.action;
@@ -487,10 +612,30 @@ modalEl.addEventListener('submit', (event) => {
   }
 });
 
+contentEl.addEventListener('submit', (event) => {
+  if (event.target.id === 'settings-form') {
+    event.preventDefault();
+    saveSettings(event.target).catch((error) => alert(error.message));
+  }
+});
+
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modalEl.hidden) closeModal(); });
 window.addEventListener('hashchange', () => { currentRoute = routeFromHash(); render(); });
 
 load();
+try {
+  const stream = new EventSource('/api/metrics/stream');
+  stream.onmessage = (event) => {
+    metrics = JSON.parse(event.data);
+    uptimeEl.textContent = `Pi uptime ${metrics.uptime_hours}h`;
+    if (currentRoute === 'overview') {
+      const metricsEl = document.querySelector('#metrics');
+      const watchdog = ops?.watchdog;
+      const opsCard = metricCard('Watchdog', watchdog?.ok ? 'OK' : watchdog?.available ? 'Alert' : 'n/a', ops?.dashboard_service ? `service ${ops.dashboard_service}` : 'not checked');
+      if (metricsEl) metricsEl.innerHTML = metricsHtml(metrics, true) + opsCard;
+    }
+  };
+} catch (_) {}
 setInterval(async () => {
   try {
     metrics = await api('/api/metrics');

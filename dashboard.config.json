@@ -15,5 +15,15 @@
     { "name": "Semiconductor Engineering", "rss": "https://semiengineering.com/feed/", "color": "#3b82f6" },
     { "name": "Chips and Cheese", "rss": "https://chipsandcheese.com/feed/", "color": "#22c55e" },
     { "name": "Heisenberg", "rss": "https://heisenberg.kr/feed/", "color": "#a855f7" }
+  ],
+  "stocks": [
+    "NASDAQ:NVDA",
+    "NASDAQ:AMD",
+    "NYSE:TSM",
+    "NASDAQ:ASML",
+    "AMEX:SPY",
+    "NASDAQ:QQQ",
+    "BINANCE:BTCUSDT",
+    "BINANCE:ETHUSDT"
   ]
 }
