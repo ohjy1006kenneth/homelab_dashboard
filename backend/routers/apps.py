@@ -109,23 +109,16 @@ def _compose_file(row: sqlite3.Row) -> Path:
     return path
 
 
-SHORT_HOSTNAME = "pi-homelab"
-TAILSCALE_DNS_SUFFIX = ".tail4979ca.ts.net"
+DEFAULT_HOSTNAME = "pi-homelab"
 
 
 def _request_hostname(request: Request | None) -> str:
     if request is None:
-        return SHORT_HOSTNAME
+        return DEFAULT_HOSTNAME
     forwarded_host = request.headers.get("x-forwarded-host")
-    host = (forwarded_host or request.headers.get("host") or request.url.hostname or SHORT_HOSTNAME).split(",", 1)[0]
+    host = (forwarded_host or request.headers.get("host") or request.url.hostname or DEFAULT_HOSTNAME).split(",", 1)[0]
     hostname = host.rsplit(":", 1)[0] if host.count(":") <= 1 else request.url.hostname
-    if not hostname or hostname in {"0.0.0.0", "::"}:
-        return SHORT_HOSTNAME
-    # Kenneth expects short-name URLs. If the dashboard is reached through the full
-    # Tailscale MagicDNS name, keep generated app links on the historical short host.
-    if hostname == f"{SHORT_HOSTNAME}{TAILSCALE_DNS_SUFFIX}":
-        return SHORT_HOSTNAME
-    return hostname
+    return hostname if hostname and hostname not in {"0.0.0.0", "::"} else DEFAULT_HOSTNAME
 
 
 def _web_ui_path(path: str | None) -> str:
