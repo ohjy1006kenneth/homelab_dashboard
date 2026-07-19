@@ -607,10 +607,10 @@ function renderOverview() {
     <nav class="overview-floating-nav" aria-label="Overview controls">
       <form class="overview-web-search" id="overview-search-form">
         <input id="overview-search" type="search" placeholder="Search the web…" autocomplete="off" />
-        <button class="button primary nav-icon-button" type="submit" aria-label="Search">⌕</button>
+        <button class="button primary nav-icon-button" type="submit" aria-label="Search"><span class="nav-glyph nav-glyph-search" aria-hidden="true"></span></button>
       </form>
-      <button class="button secondary nav-icon-button" data-add-widget="true" aria-label="Add widget">+</button>
-      <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false">📌</button>
+      <button class="button secondary nav-icon-button" data-add-widget="true" aria-label="Add widget"><span class="nav-glyph nav-glyph-plus" aria-hidden="true"></span></button>
+      <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false"><span class="nav-glyph nav-glyph-pin" aria-hidden="true"></span></button>
     </nav>`;
   initOverviewGrid();
   setOverviewWidgetsPinned(overviewWidgetsPinned());

@@ -718,3 +718,59 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .widget-catalog-card { min-height: 72px; }
 .memo-widget { width: 100%; height: 100%; resize: none; background: #050505; color: var(--text-primary); border: 1px solid var(--border-soft); border-radius: var(--r-md); padding: 14px; font: 14px/1.55 var(--font-sans); outline: none; }
 .memo-widget:focus { border-color: #555; background: #070707; }
+
+
+/* Overview iteration: webview toolbar spacing/scroll and minimal pin state */
+.overview-widget[data-widget-type='webview'] .overview-widget-body {
+  overflow: hidden;
+  padding-top: 52px;
+}
+.overview-widget[data-widget-type='webview'] .overview-widget-head {
+  top: 8px;
+}
+.webview-widget {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.webview-toolbar {
+  position: relative;
+  z-index: 2;
+}
+.webview-widget iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  pointer-events: auto;
+  touch-action: auto;
+}
+.overview-floating-nav .button.nav-icon-button,
+.overview-floating-nav .button.nav-icon-button.active,
+.overview-floating-nav .button.nav-icon-button[aria-pressed='true'] {
+  background: transparent;
+  color: var(--text-primary);
+  border: 0;
+}
+.overview-floating-nav .button.nav-icon-button[aria-pressed='true'] {
+  color: #fff;
+}
+.overview-floating-nav .button.nav-icon-button[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .9;
+}
+.nav-icon-button { position: relative; }
+.nav-glyph { position: relative; display: block; width: 22px; height: 22px; color: currentColor; }
+.nav-glyph-search::before { content: ''; position: absolute; width: 11px; height: 11px; left: 3px; top: 3px; border: 2px solid currentColor; border-radius: 999px; }
+.nav-glyph-search::after { content: ''; position: absolute; width: 8px; height: 2px; left: 13px; top: 15px; background: currentColor; border-radius: 999px; transform: rotate(45deg); transform-origin: left center; }
+.nav-glyph-plus::before, .nav-glyph-plus::after { content: ''; position: absolute; left: 4px; top: 10px; width: 14px; height: 2px; background: currentColor; border-radius: 999px; }
+.nav-glyph-plus::after { transform: rotate(90deg); }
+.nav-glyph-pin::before { content: ''; position: absolute; left: 8px; top: 2px; width: 8px; height: 12px; border: 2px solid currentColor; border-bottom: 0; border-radius: 4px 4px 1px 1px; transform: rotate(42deg); }
+.nav-glyph-pin::after { content: ''; position: absolute; left: 10px; top: 12px; width: 2px; height: 9px; background: currentColor; border-radius: 999px; transform: rotate(42deg); transform-origin: top center; }
