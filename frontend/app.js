@@ -76,6 +76,8 @@ let newsVisibleLimit = 10;
 const NEWS_PAGE_SIZE = 10;
 const NEWS_MAX_VISIBLE = 60;
 let settings = null;
+let overviewConfig = null;
+let overviewConfigSaveTimer = null;
 let ops = null;
 let stockAudit = null;
 let stockReviewOptions = null;
@@ -161,6 +163,76 @@ function readLocalArray(key, fallback = []) {
 
 function writeLocalArray(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function defaultOverviewConfig() {
+  return {
+    widgets: DEFAULT_OVERVIEW_WIDGETS.map((item) => ({ ...item })),
+    widgets_pinned: false,
+    bookmarks: DEFAULT_BOOKMARKS.map((item) => ({ ...item })),
+    webview_urls: {},
+    memos: {},
+    weather: { latitude: null, longitude: null, label: 'Local weather' },
+    google_calendar: { connected: false, setup_required: true },
+  };
+}
+
+function scheduleOverviewSync() {
+  if (!overviewConfig) return;
+  if (overviewConfigSaveTimer) clearTimeout(overviewConfigSaveTimer);
+  overviewConfigSaveTimer = setTimeout(() => {
+    const payload = {
+      widgets: overviewConfig.widgets,
+      widgets_pinned: overviewConfig.widgets_pinned,
+      bookmarks: overviewConfig.bookmarks,
+      webview_urls: overviewConfig.webview_urls,
+      memos: overviewConfig.memos,
+      weather: overviewConfig.weather,
+    };
+    api('/api/overview', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+      .then((result) => { overviewConfig = result.overview; })
+      .catch((error) => setStatus(`Overview sync failed: ${error.message}`, 'error'));
+  }, 350);
+}
+
+function migrateOverviewLocalState() {
+  if (!overviewConfig) return;
+  let changed = false;
+  try {
+    const widgets = JSON.parse(localStorage.getItem('overviewWidgets') || 'null');
+    if (Array.isArray(widgets) && widgets.length && (!Array.isArray(overviewConfig.widgets) || !overviewConfig.widgets.length)) {
+      overviewConfig.widgets = widgets;
+      changed = true;
+    }
+  } catch (_) {}
+  try {
+    const bookmarks = JSON.parse(localStorage.getItem('overviewBookmarks') || 'null');
+    if (Array.isArray(bookmarks) && bookmarks.length && (!Array.isArray(overviewConfig.bookmarks) || !overviewConfig.bookmarks.length)) {
+      overviewConfig.bookmarks = bookmarks;
+      changed = true;
+    }
+  } catch (_) {}
+  try {
+    const urls = JSON.parse(localStorage.getItem('overviewWebviewUrls') || '{}');
+    if (urls && typeof urls === 'object' && Object.keys(urls).length && !Object.keys(overviewConfig.webview_urls || {}).length) {
+      overviewConfig.webview_urls = urls;
+      changed = true;
+    }
+  } catch (_) {}
+  const memos = { ...(overviewConfig.memos || {}) };
+  Object.keys(localStorage).filter((key) => key.startsWith('overviewMemo:')).forEach((key) => {
+    const id = key.replace('overviewMemo:', '');
+    if (!memos[id]) {
+      memos[id] = localStorage.getItem(key) || '';
+      changed = true;
+    }
+  });
+  if (localStorage.getItem('overviewWidgetsPinned') === 'true' && overviewConfig.widgets_pinned !== true) {
+    overviewConfig.widgets_pinned = true;
+    changed = true;
+  }
+  overviewConfig.memos = memos;
+  if (changed) scheduleOverviewSync();
 }
 
 function prefs(section = '', fallback = {}) {
@@ -542,43 +614,44 @@ function normalizeOverviewWidget(widget) {
 }
 
 function readOverviewWidgets() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('overviewWidgets') || 'null');
-    if (Array.isArray(saved) && saved.length) {
-      const normalized = saved.map(normalizeOverviewWidget);
-      const hasMetricWidgets = normalized.some((widget) => metricWidgetInfo(widget.type));
-      if (!hasMetricWidgets && normalized.some((widget) => widget.type === 'system-monitor')) {
-        const system = normalized.find((widget) => widget.type === 'system-monitor') || { x: 0, y: 0 };
-        const systemY = system.y || 0;
-        const metricWidgets = OVERVIEW_METRIC_WIDGETS.map((item, index) => ({
-          id: item.type,
-          type: item.type,
-          x: (index % 4) * 3,
-          y: systemY + Math.floor(index / 4) * 2,
-          w: 3,
-          h: item.h,
-        }));
-        const shifted = normalized
-          .filter((widget) => widget.type !== 'system-monitor')
-          .map((widget) => ({ ...widget, y: widget.y >= systemY + (system.h || 2) ? widget.y + 2 : widget.y }));
-        return [...metricWidgets, ...shifted];
-      }
-      return normalized;
-    }
-  } catch (_) {}
-  return DEFAULT_OVERVIEW_WIDGETS.map((item) => ({ ...item }));
+  const saved = Array.isArray(overviewConfig?.widgets) && overviewConfig.widgets.length ? overviewConfig.widgets : DEFAULT_OVERVIEW_WIDGETS;
+  const normalized = saved.map(normalizeOverviewWidget);
+  const hasMetricWidgets = normalized.some((widget) => metricWidgetInfo(widget.type));
+  if (!hasMetricWidgets && normalized.some((widget) => widget.type === 'system-monitor')) {
+    const system = normalized.find((widget) => widget.type === 'system-monitor') || { x: 0, y: 0 };
+    const systemY = system.y || 0;
+    const metricWidgets = OVERVIEW_METRIC_WIDGETS.map((item, index) => ({
+      id: item.type,
+      type: item.type,
+      x: (index % 4) * 3,
+      y: systemY + Math.floor(index / 4) * 2,
+      w: 3,
+      h: item.h,
+    }));
+    const shifted = normalized
+      .filter((widget) => widget.type !== 'system-monitor')
+      .map((widget) => ({ ...widget, y: widget.y >= systemY + (system.h || 2) ? widget.y + 2 : widget.y }));
+    return [...metricWidgets, ...shifted];
+  }
+  return normalized;
 }
 
 function writeOverviewWidgets(widgets) {
+  if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  overviewConfig.widgets = widgets;
   localStorage.setItem('overviewWidgets', JSON.stringify(widgets));
+  scheduleOverviewSync();
 }
 
 function overviewWidgetsPinned() {
-  return localStorage.getItem('overviewWidgetsPinned') === 'true';
+  return overviewConfig?.widgets_pinned === true;
 }
 
 function setOverviewWidgetsPinned(pinned) {
+  if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  overviewConfig.widgets_pinned = pinned;
   localStorage.setItem('overviewWidgetsPinned', pinned ? 'true' : 'false');
+  scheduleOverviewSync();
   document.body.classList.toggle('overview-widgets-pinned', pinned);
   document.querySelector('[data-pin-widgets]')?.classList.toggle('active', pinned);
   document.querySelector('[data-pin-widgets]')?.setAttribute('aria-pressed', String(pinned));
@@ -693,18 +766,16 @@ function safeUrl(value, fallback = WIDGET_URLS.webview) {
 }
 
 function readWebviewUrls() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('overviewWebviewUrls') || '{}');
-    return saved && typeof saved === 'object' ? saved : {};
-  } catch (_) {
-    return {};
-  }
+  return overviewConfig?.webview_urls && typeof overviewConfig.webview_urls === 'object' ? overviewConfig.webview_urls : {};
 }
 
 function writeWebviewUrl(id, url) {
-  const urls = readWebviewUrls();
+  if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  const urls = { ...(overviewConfig.webview_urls || {}) };
   urls[id] = safeUrl(url);
+  overviewConfig.webview_urls = urls;
   localStorage.setItem('overviewWebviewUrls', JSON.stringify(urls));
+  scheduleOverviewSync();
 }
 
 function webviewUrlFor(widget = {}) {
@@ -726,15 +797,16 @@ function bookmarkFaviconUrl(url = '') {
 }
 
 function readBookmarks() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('overviewBookmarks') || 'null');
-    if (Array.isArray(saved) && saved.length) return saved;
-  } catch (_) {}
-  return DEFAULT_BOOKMARKS.map((item) => ({ ...item }));
+  return Array.isArray(overviewConfig?.bookmarks) && overviewConfig.bookmarks.length
+    ? overviewConfig.bookmarks
+    : DEFAULT_BOOKMARKS.map((item) => ({ ...item }));
 }
 
 function writeBookmarks(bookmarks) {
+  if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  overviewConfig.bookmarks = bookmarks;
   localStorage.setItem('overviewBookmarks', JSON.stringify(bookmarks));
+  scheduleOverviewSync();
 }
 
 function bookmarksHtml() {
@@ -787,7 +859,14 @@ function evaluateCalculatorExpression(expression) {
 }
 
 function memoValue(id = 'memo') {
-  return localStorage.getItem(`overviewMemo:${id}`) || '';
+  return overviewConfig?.memos?.[id] || localStorage.getItem(`overviewMemo:${id}`) || '';
+}
+
+function writeMemoValue(id = 'memo', value = '') {
+  if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  overviewConfig.memos = { ...(overviewConfig.memos || {}), [id]: value };
+  localStorage.setItem(`overviewMemo:${id}`, value);
+  scheduleOverviewSync();
 }
 
 function memoHtml(widget = {}) {
@@ -838,7 +917,7 @@ function hydrateWidget(id, type) {
   if (type === 'weather') renderWeather(root.querySelector('[data-weather-widget]'));
 }
 
-function renderCalendar(el) {
+async function renderCalendar(el) {
   if (!el) return;
   const now = new Date();
   const year = now.getFullYear();
@@ -848,22 +927,51 @@ function renderCalendar(el) {
   const cells = [];
   for (let i = 0; i < first.getDay(); i += 1) cells.push('<span></span>');
   for (let day = 1; day <= days; day += 1) cells.push(`<strong class="${day === now.getDate() ? 'today' : ''}">${day}</strong>`);
-  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>`;
+  let eventsHtml = '<small>Loading Google Calendar…</small>';
+  try {
+    const calendar = await api('/api/overview/calendar?days=31');
+    const events = Array.isArray(calendar.events) ? calendar.events.slice(0, 4) : [];
+    if (calendar.google_calendar?.connected && events.length) {
+      eventsHtml = `<div class="calendar-events">${events.map((event) => {
+        const startValue = event.start?.dateTime || event.start?.date || '';
+        const start = startValue ? new Date(startValue) : null;
+        const label = start && !Number.isNaN(start.getTime()) ? start.toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Soon';
+        return `<a href="${escapeHtml(event.htmlLink || '#')}" target="_blank" rel="noreferrer"><span>${escapeHtml(label)}</span><strong>${escapeHtml(event.summary || 'Untitled')}</strong></a>`;
+      }).join('')}</div>`;
+    } else if (calendar.google_calendar?.connected) {
+      eventsHtml = '<small>No upcoming Google Calendar events.</small>';
+    } else {
+      eventsHtml = '<small>Google Calendar not connected. Set up OAuth on the Pi to sync events.</small>';
+    }
+  } catch (error) {
+    eventsHtml = `<small>Calendar sync unavailable: ${escapeHtml(error.message)}</small>`;
+  }
+  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
 }
 
 async function renderWeather(el) {
   if (!el) return;
+  const weatherUrl = (lat, lon) => `/api/overview/weather?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`;
   try {
-    const pos = await new Promise((resolve, reject) => {
-      if (!navigator.geolocation) { reject(new Error('No location')); return; }
-      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000, maximumAge: 900000 });
-    });
-    const { latitude, longitude } = pos.coords;
-    const data = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`).then((res) => res.json());
+    let data = await api('/api/overview/weather');
+    if (data.needs_location && navigator.geolocation) {
+      const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000, maximumAge: 900000 }));
+      const { latitude, longitude } = pos.coords;
+      api('/api/overview/weather/location', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ latitude, longitude, label: 'Browser location' }) }).catch(() => {});
+      data = await api(weatherUrl(latitude, longitude));
+    }
+    if (!data.ok) {
+      el.innerHTML = '<strong>Weather</strong><small>Allow location once to sync weather across devices.</small>';
+      return;
+    }
     const c = data.current || {};
-    el.innerHTML = `<strong>${Math.round(c.temperature_2m)}°C</strong><small>${Math.round(c.relative_humidity_2m)}% humidity · ${Math.round(c.wind_speed_10m)} km/h wind</small>`;
-  } catch (_) {
-    el.innerHTML = '<strong>Weather</strong><small>Allow location to show local weather.</small>';
+    const daily = data.daily || {};
+    const high = Array.isArray(daily.temperature_2m_max) ? Math.round(daily.temperature_2m_max[0]) : null;
+    const low = Array.isArray(daily.temperature_2m_min) ? Math.round(daily.temperature_2m_min[0]) : null;
+    const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
+    el.innerHTML = `<strong>${Math.round(c.temperature_2m)}°C</strong><small>${Math.round(c.relative_humidity_2m)}% humidity · ${Math.round(c.wind_speed_10m)} km/h wind${range}</small><small>${escapeHtml(data.location?.label || data.timezone || 'Local weather')}</small>`;
+  } catch (error) {
+    el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Weather unavailable')}</small>`;
   }
 }
 
@@ -1969,10 +2077,11 @@ function configureRefreshIntervals() {
 async function load() {
   setStatus('Loading…');
   try {
-    const [nextMetrics, appRows, settingRows] = await Promise.all([
+    const [nextMetrics, appRows, settingRows, overviewRows] = await Promise.all([
       api('/api/metrics'),
       api('/api/apps?health=true').catch(() => []),
       api('/api/settings').catch(() => ({ stocks: [], pinned_app_ids: [] })),
+      api('/api/overview').catch(() => defaultOverviewConfig()),
     ]);
     metrics = nextMetrics;
     apps = appRows;
@@ -1980,6 +2089,8 @@ async function load() {
     missionControl = null;
     newsletterSources = [];
     settings = settingRows;
+    overviewConfig = { ...defaultOverviewConfig(), ...overviewRows };
+    migrateOverviewLocalState();
     newsletterSources = Array.isArray(settings.newsletter_sources) ? settings.newsletter_sources : [];
     if (!window.location.hash) currentRoute = routeFromHash();
     applyPreferences();
@@ -2078,7 +2189,7 @@ contentEl.addEventListener('input', (event) => {
   const memo = event.target.closest('[data-memo-widget]');
   if (memo) {
     const widget = memo.closest('[data-widget-id]');
-    localStorage.setItem(`overviewMemo:${widget?.dataset.widgetId || 'memo'}`, memo.value);
+    writeMemoValue(widget?.dataset.widgetId || 'memo', memo.value);
   }
 });
 

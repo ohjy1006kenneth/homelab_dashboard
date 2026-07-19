@@ -1,6 +1,6 @@
 {
   "title": "lab.local",
-  "theme": "dark",
+  "theme": "system",
   "accent": "#ffffff",
   "agents": [
     {
@@ -9,12 +9,38 @@
       "script": "/home/juyoungoh/nas/Projects/dashboard/cron/newsletter_fetcher.py",
       "schedule": "0 8 * * *",
       "description": "Fetches and summarizes RSS newsletters"
+    },
+    {
+      "id": "news-summarizer-agent",
+      "name": "News Summarizer Agent",
+      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/news_summarizer_agent.py",
+      "schedule": "on demand after RSS fetch",
+      "description": "Uses Hermes news-brief profile for summarization and dashcraft profile for curation/summarization"
     }
   ],
   "newsletter_sources": [
-    { "name": "Semiconductor Engineering", "rss": "https://semiengineering.com/feed/", "color": "#3b82f6" },
-    { "name": "Chips and Cheese", "rss": "https://chipsandcheese.com/feed/", "color": "#22c55e" },
-    { "name": "Heisenberg", "rss": "https://heisenberg.kr/feed/", "color": "#a855f7" }
+    {
+      "name": "Semiconductor Engineering",
+      "rss": "https://semiengineering.com/feed/",
+      "color": "#3b82f6"
+    },
+    {
+      "name": "Chips and Cheese",
+      "rss": "https://chipsandcheese.com/feed/",
+      "color": "#22c55e"
+    },
+    {
+      "name": "IEEE Spectrum AI",
+      "rss": "https://spectrum.ieee.org/rss/artificial-intelligence/fulltext",
+      "color": "#f97316",
+      "category": "ai"
+    },
+    {
+      "name": "CNBC Markets",
+      "rss": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+      "color": "#facc15",
+      "category": "stocks"
+    }
   ],
   "stocks": [
     "NASDAQ:NVDA",
@@ -25,5 +51,201 @@
     "NASDAQ:QQQ",
     "BINANCE:BTCUSDT",
     "BINANCE:ETHUSDT"
-  ]
+  ],
+  "news_summarizer": {
+    "enabled": true,
+    "profile": "news-brief",
+    "provider": null,
+    "model": null,
+    "fallback": "extractive_two_paragraphs",
+    "interests": [
+      "semiconductor",
+      "AI",
+      "stocks",
+      "homelab"
+    ],
+    "mode": "hermes_news_brief_agent",
+    "cron_job_id": "090cec1ed7aa"
+  },
+  "news_retention": {
+    "max_items": 300,
+    "display_limit": 10,
+    "load_more_step": 10,
+    "max_visible": 60
+  },
+  "pinned_app_ids": [
+    "aiostreams",
+    "aiometadata",
+    "big-bear-immich",
+    "big-bear-pihole",
+    "big-bear-portainer",
+    "big-bear-syncthing"
+  ],
+  "preferences": {
+    "overview": {
+      "metrics": [
+        "cpu",
+        "ram",
+        "root",
+        "download",
+        "upload",
+        "codex"
+      ],
+      "show_codex_local_tokens": true
+    },
+    "refresh": {
+      "codex_seconds": 60,
+      "metrics_seconds": 5,
+      "apps_seconds": 30,
+      "news_seconds": 0
+    },
+    "news": {
+      "default_source": "",
+      "page_size": 10,
+      "curated_categories": [
+        "Semiconductor",
+        "Stocks",
+        "AI"
+      ],
+      "hide_roundups": true
+    },
+    "appearance": {
+      "density": "comfortable",
+      "reduce_animations": false
+    },
+    "navigation": {
+      "landing_tab": "overview",
+      "visible_tabs": [
+        "overview",
+        "apps",
+        "news",
+        "stocks",
+        "settings"
+      ]
+    }
+  },
+  "provider_usage": {
+    "ttl_seconds": 60
+  },
+  "overview": {
+    "widgets": [
+      {
+        "id": "metric-cpu",
+        "type": "metric-cpu",
+        "x": 0,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      },
+      {
+        "id": "metric-ram",
+        "type": "metric-ram",
+        "x": 3,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      },
+      {
+        "id": "metric-codex",
+        "type": "metric-codex",
+        "x": 6,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "x": 9,
+        "y": 0,
+        "w": 3,
+        "h": 2
+      },
+      {
+        "id": "apps",
+        "type": "app-launcher",
+        "x": 0,
+        "y": 2,
+        "w": 8,
+        "h": 4
+      },
+      {
+        "id": "webview",
+        "type": "webview",
+        "x": 8,
+        "y": 2,
+        "w": 4,
+        "h": 5
+      },
+      {
+        "id": "bookmarks",
+        "type": "bookmarks",
+        "x": 0,
+        "y": 6,
+        "w": 5,
+        "h": 4
+      },
+      {
+        "id": "weather",
+        "type": "weather",
+        "x": 5,
+        "y": 6,
+        "w": 3,
+        "h": 3
+      },
+      {
+        "id": "calendar",
+        "type": "calendar",
+        "x": 8,
+        "y": 7,
+        "w": 4,
+        "h": 4
+      },
+      {
+        "id": "calculator",
+        "type": "calculator",
+        "x": 5,
+        "y": 11,
+        "w": 4,
+        "h": 3
+      },
+      {
+        "id": "memo",
+        "type": "memo",
+        "x": 9,
+        "y": 11,
+        "w": 3,
+        "h": 3
+      }
+    ],
+    "widgets_pinned": true,
+    "bookmarks": [
+      {
+        "id": "github",
+        "title": "GitHub",
+        "url": "https://github.com/"
+      },
+      {
+        "id": "huggingface",
+        "title": "Hugging Face",
+        "url": "https://huggingface.co/"
+      },
+      {
+        "id": "youtube",
+        "title": "YouTube",
+        "url": "https://youtube.com/"
+      }
+    ],
+    "webview_urls": {
+      "webview-1784453222319": "https://gemini.google.com/app"
+    },
+    "memos": {
+      "memo-1784455289071": ""
+    },
+    "weather": {
+      "latitude": null,
+      "longitude": null,
+      "label": "Local weather"
+    }
+  }
 }
