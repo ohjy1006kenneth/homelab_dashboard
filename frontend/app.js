@@ -16,11 +16,12 @@ const ALL_ROUTES = ['overview', 'apps', 'news', 'stocks', 'settings'];
 const DEFAULT_METRICS = ['cpu', 'ram', 'root', 'uptime', 'codex'];
 const OVERVIEW_WIDGET_CATALOG = [
   { type: 'web-search', title: 'Web Search', category: 'Utility', w: 6, h: 2 },
-  { type: 'app-launcher', title: 'App Launcher', category: 'Homelab', w: 8, h: 4 },
+  { type: 'app-launcher', title: 'Server Apps', category: 'Homelab', w: 8, h: 4 },
   { type: 'ai-chatgpt', title: 'ChatGPT', category: 'AI', w: 6, h: 5 },
   { type: 'ai-claude', title: 'Claude', category: 'AI', w: 6, h: 5 },
   { type: 'ai-gemini', title: 'Gemini', category: 'AI', w: 6, h: 5 },
   { type: 'webview', title: 'Webview', category: 'Web', w: 6, h: 5 },
+  { type: 'bookmarks', title: 'Bookmarks', category: 'Web', w: 5, h: 4 },
   { type: 'clock', title: 'Clock', category: 'Utility', w: 3, h: 2 },
   { type: 'calendar', title: 'Calendar', category: 'Utility', w: 4, h: 4 },
   { type: 'weather', title: 'Weather', category: 'Utility', w: 4, h: 3 },
@@ -31,6 +32,7 @@ const DEFAULT_OVERVIEW_WIDGETS = [
   { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 2 },
   { id: 'apps', type: 'app-launcher', x: 0, y: 2, w: 8, h: 4 },
   { id: 'chatgpt', type: 'ai-chatgpt', x: 8, y: 2, w: 4, h: 4 },
+  { id: 'bookmarks', type: 'bookmarks', x: 0, y: 10, w: 5, h: 4 },
   { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 3 },
   { id: 'calendar', type: 'calendar', x: 4, y: 6, w: 4, h: 4 },
   { id: 'calculator', type: 'calculator', x: 8, y: 6, w: 4, h: 4 },
@@ -41,6 +43,11 @@ const WIDGET_URLS = {
   'ai-gemini': 'https://gemini.google.com/',
   webview: 'https://www.google.com/webhp?igu=1',
 };
+const DEFAULT_BOOKMARKS = [
+  { id: 'github', title: 'GitHub', url: 'https://github.com/' },
+  { id: 'huggingface', title: 'Hugging Face', url: 'https://huggingface.co/' },
+  { id: 'youtube', title: 'YouTube', url: 'https://youtube.com/' },
+];
 let overviewGrid = null;
 let overviewWidgetTimers = [];
 
@@ -535,21 +542,18 @@ function cleanupOverviewWidgets() {
 
 function renderOverview() {
   cleanupOverviewWidgets();
-  contentEl.innerHTML = `<section class="overview-board-head">
+  contentEl.innerHTML = `<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
+    <section class="widget-manager panel" id="widget-manager" hidden>
+      <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add widgets</h2></div></div>
+      <div class="widget-catalog">${OVERVIEW_WIDGET_CATALOG.map(widgetCatalogCard).join('')}</div>
+    </section>
+    <nav class="overview-floating-nav" aria-label="Overview controls">
       <form class="overview-web-search" id="overview-search-form">
         <input id="overview-search" type="search" placeholder="Search the web…" autocomplete="off" />
         <button class="button primary" type="submit">Search</button>
       </form>
-      <div class="overview-board-actions">
-        <button class="button secondary" data-widget-manager="true">Manage widgets</button>
-        <button class="button secondary" data-add-widget="true">Add widget</button>
-      </div>
-    </section>
-    <section class="widget-manager panel" id="widget-manager" hidden>
-      <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add or remove widgets</h2></div></div>
-      <div class="widget-catalog">${OVERVIEW_WIDGET_CATALOG.map(widgetCatalogCard).join('')}</div>
-    </section>
-    <section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>`;
+      <button class="button secondary" data-add-widget="true">Add widget</button>
+    </nav>`;
   initOverviewGrid();
 }
 
@@ -610,6 +614,30 @@ function persistOverviewGrid() {
   writeOverviewWidgets(widgets);
 }
 
+function readBookmarks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('overviewBookmarks') || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch (_) {}
+  return DEFAULT_BOOKMARKS.map((item) => ({ ...item }));
+}
+
+function writeBookmarks(bookmarks) {
+  localStorage.setItem('overviewBookmarks', JSON.stringify(bookmarks));
+}
+
+function bookmarksHtml() {
+  const rows = readBookmarks();
+  return `<div class="bookmark-widget">
+    <form class="bookmark-form">
+      <input name="title" placeholder="Site name" />
+      <input name="url" placeholder="https://example.com" />
+      <button class="button primary" type="submit">Add</button>
+    </form>
+    <div class="bookmark-list">${rows.map((item) => `<article class="bookmark-row"><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.url)}</small></a><button class="icon-button danger" data-delete-bookmark="${escapeHtml(item.id)}">×</button></article>`).join('')}</div>
+  </div>`;
+}
+
 function widgetBodyHtml(type, widget = {}) {
   if (type === 'web-search') return `<form class="widget-search-form"><input type="search" placeholder="Search Google…" /><button class="button primary" type="submit">Go</button></form>`;
   if (type === 'app-launcher') return `<div id="overview-app-grid" class="app-grid overview-grid"></div>`;
@@ -617,6 +645,7 @@ function widgetBodyHtml(type, widget = {}) {
   if (type === 'calendar') return `<div class="calendar-widget" data-calendar-widget></div>`;
   if (type === 'weather') return `<div class="weather-widget" data-weather-widget><strong>Weather</strong><small>Loading…</small></div>`;
   if (type === 'calculator') return calculatorHtml();
+  if (type === 'bookmarks') return bookmarksHtml();
   const url = WIDGET_URLS[type] || WIDGET_URLS.webview;
   return `<div class="webview-widget"><iframe src="${escapeHtml(url)}" title="${escapeHtml(type)}" loading="lazy"></iframe><a class="button" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Open</a></div>`;
 }
@@ -1868,23 +1897,30 @@ contentEl.addEventListener('input', (event) => {
 });
 
 contentEl.addEventListener('click', async (event) => {
-  if (event.target.closest('[data-widget-manager], [data-add-widget]')) {
-    const manager = document.querySelector('#widget-manager');
-    if (manager) manager.hidden = !manager.hidden;
-    return;
-  }
-  const catalogButton = event.target.closest('[data-widget-type]');
-  if (catalogButton && overviewGrid) {
-    const type = catalogButton.dataset.widgetType;
-    const item = overviewWidgetCatalogItem(type);
-    addOverviewWidget({ id: `${type}-${Date.now()}`, type, w: item.w, h: item.h });
-    return;
-  }
   const deleteButton = event.target.closest('[data-delete-widget]');
   if (deleteButton && overviewGrid) {
     const widget = deleteButton.closest('.grid-stack-item');
     if (widget) overviewGrid.removeWidget(widget);
     persistOverviewGrid();
+    return;
+  }
+  const bookmarkDelete = event.target.closest('[data-delete-bookmark]');
+  if (bookmarkDelete) {
+    writeBookmarks(readBookmarks().filter((item) => item.id !== bookmarkDelete.dataset.deleteBookmark));
+    const body = bookmarkDelete.closest('.overview-widget-body');
+    if (body) body.innerHTML = bookmarksHtml();
+    return;
+  }
+  if (event.target.closest('[data-add-widget]')) {
+    const manager = document.querySelector('#widget-manager');
+    if (manager) manager.hidden = !manager.hidden;
+    return;
+  }
+  const catalogButton = event.target.closest('.widget-catalog-card[data-widget-type]');
+  if (catalogButton && overviewGrid) {
+    const type = catalogButton.dataset.widgetType;
+    const item = overviewWidgetCatalogItem(type);
+    addOverviewWidget({ id: `${type}-${Date.now()}`, type, w: item.w, h: item.h });
     return;
   }
   const calcButton = event.target.closest('[data-calc-key]');
@@ -2030,6 +2066,18 @@ contentEl.addEventListener('submit', (event) => {
     event.preventDefault();
     const query = event.target.querySelector('input[type="search"]')?.value?.trim();
     if (query) window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  if (event.target.classList.contains('bookmark-form')) {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const title = String(data.get('title') || '').trim();
+    let url = String(data.get('url') || '').trim();
+    if (!title || !url) return;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    writeBookmarks([...readBookmarks(), { id: `bookmark-${Date.now()}`, title, url }]);
+    const body = event.target.closest('.overview-widget-body');
+    if (body) body.innerHTML = bookmarksHtml();
     return;
   }
   if (event.target.id === 'settings-form') {
