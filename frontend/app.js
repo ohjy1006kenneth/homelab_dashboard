@@ -14,8 +14,17 @@ const modalEl = document.querySelector('#app-modal');
 const navLinks = [...document.querySelectorAll('nav a')];
 const ALL_ROUTES = ['overview', 'apps', 'news', 'stocks', 'settings'];
 const DEFAULT_METRICS = ['cpu', 'ram', 'root', 'uptime', 'codex'];
+const OVERVIEW_METRIC_WIDGETS = [
+  { metric: 'cpu', type: 'metric-cpu', title: 'CPU', category: 'System', w: 3, h: 2 },
+  { metric: 'ram', type: 'metric-ram', title: 'RAM', category: 'System', w: 3, h: 2 },
+  { metric: 'root', type: 'metric-root', title: 'Root Disk', category: 'System', w: 3, h: 2 },
+  { metric: 'uptime', type: 'metric-uptime', title: 'Uptime', category: 'System', w: 3, h: 2 },
+  { metric: 'download', type: 'metric-download', title: 'Download', category: 'System', w: 3, h: 2 },
+  { metric: 'upload', type: 'metric-upload', title: 'Upload', category: 'System', w: 3, h: 2 },
+  { metric: 'codex', type: 'metric-codex', title: 'Codex Usage', category: 'System', w: 4, h: 2 },
+];
 const OVERVIEW_WIDGET_CATALOG = [
-  { type: 'system-monitor', title: 'System Monitor', category: 'Homelab', w: 8, h: 2 },
+  ...OVERVIEW_METRIC_WIDGETS,
   { type: 'web-search', title: 'Web Search', category: 'Utility', w: 6, h: 2 },
   { type: 'app-launcher', title: 'Server Apps', category: 'Homelab', w: 8, h: 4 },
   { type: 'webview', title: 'Webview', category: 'Web', w: 6, h: 5 },
@@ -26,15 +35,17 @@ const OVERVIEW_WIDGET_CATALOG = [
   { type: 'calculator', title: 'Calculator', category: 'Utility', w: 4, h: 4 },
 ];
 const DEFAULT_OVERVIEW_WIDGETS = [
-  { id: 'system', type: 'system-monitor', x: 0, y: 0, w: 8, h: 2 },
-  { id: 'search', type: 'web-search', x: 0, y: 2, w: 8, h: 2 },
-  { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 2 },
+  { id: 'metric-cpu', type: 'metric-cpu', x: 0, y: 0, w: 3, h: 2 },
+  { id: 'metric-ram', type: 'metric-ram', x: 3, y: 0, w: 3, h: 2 },
+  { id: 'metric-codex', type: 'metric-codex', x: 6, y: 0, w: 3, h: 2 },
+  { id: 'clock', type: 'clock', x: 9, y: 0, w: 3, h: 2 },
+  { id: 'search', type: 'web-search', x: 0, y: 2, w: 6, h: 2 },
   { id: 'apps', type: 'app-launcher', x: 0, y: 4, w: 8, h: 4 },
   { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 5, url: 'https://chatgpt.com/' },
-  { id: 'bookmarks', type: 'bookmarks', x: 0, y: 10, w: 5, h: 4 },
-  { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 3 },
-  { id: 'calendar', type: 'calendar', x: 4, y: 6, w: 4, h: 4 },
-  { id: 'calculator', type: 'calculator', x: 8, y: 6, w: 4, h: 4 },
+  { id: 'bookmarks', type: 'bookmarks', x: 0, y: 8, w: 5, h: 4 },
+  { id: 'weather', type: 'weather', x: 5, y: 8, w: 3, h: 3 },
+  { id: 'calendar', type: 'calendar', x: 8, y: 7, w: 4, h: 4 },
+  { id: 'calculator', type: 'calculator', x: 5, y: 11, w: 4, h: 3 },
 ];
 const WIDGET_URLS = {
   'ai-chatgpt': 'https://chatgpt.com/',
@@ -531,13 +542,48 @@ function normalizeOverviewWidget(widget) {
 function readOverviewWidgets() {
   try {
     const saved = JSON.parse(localStorage.getItem('overviewWidgets') || 'null');
-    if (Array.isArray(saved) && saved.length) return saved.map(normalizeOverviewWidget);
+    if (Array.isArray(saved) && saved.length) {
+      const normalized = saved.map(normalizeOverviewWidget);
+      const hasMetricWidgets = normalized.some((widget) => metricWidgetInfo(widget.type));
+      if (!hasMetricWidgets && normalized.some((widget) => widget.type === 'system-monitor')) {
+        const system = normalized.find((widget) => widget.type === 'system-monitor') || { x: 0, y: 0 };
+        const systemY = system.y || 0;
+        const metricWidgets = OVERVIEW_METRIC_WIDGETS.map((item, index) => ({
+          id: item.type,
+          type: item.type,
+          x: (index % 4) * 3,
+          y: systemY + Math.floor(index / 4) * 2,
+          w: 3,
+          h: item.h,
+        }));
+        const shifted = normalized
+          .filter((widget) => widget.type !== 'system-monitor')
+          .map((widget) => ({ ...widget, y: widget.y >= systemY + (system.h || 2) ? widget.y + 2 : widget.y }));
+        return [...metricWidgets, ...shifted];
+      }
+      return normalized;
+    }
   } catch (_) {}
   return DEFAULT_OVERVIEW_WIDGETS.map((item) => ({ ...item }));
 }
 
 function writeOverviewWidgets(widgets) {
   localStorage.setItem('overviewWidgets', JSON.stringify(widgets));
+}
+
+function overviewWidgetsPinned() {
+  return localStorage.getItem('overviewWidgetsPinned') === 'true';
+}
+
+function setOverviewWidgetsPinned(pinned) {
+  localStorage.setItem('overviewWidgetsPinned', pinned ? 'true' : 'false');
+  document.body.classList.toggle('overview-widgets-pinned', pinned);
+  document.querySelector('[data-pin-widgets]')?.classList.toggle('active', pinned);
+  document.querySelector('[data-pin-widgets]')?.setAttribute('aria-pressed', String(pinned));
+  if (overviewGrid) {
+    overviewGrid.movable(!pinned);
+    overviewGrid.resizable(!pinned);
+  }
 }
 
 function cleanupOverviewWidgets() {
@@ -559,11 +605,13 @@ function renderOverview() {
     <nav class="overview-floating-nav" aria-label="Overview controls">
       <form class="overview-web-search" id="overview-search-form">
         <input id="overview-search" type="search" placeholder="Search the web…" autocomplete="off" />
-        <button class="button primary" type="submit">Search</button>
+        <button class="button primary nav-icon-button" type="submit" aria-label="Search">⌕</button>
       </form>
-      <button class="button secondary" data-add-widget="true">Add widget</button>
+      <button class="button secondary nav-icon-button" data-add-widget="true" aria-label="Add widget">+</button>
+      <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false">📌</button>
     </nav>`;
   initOverviewGrid();
+  setOverviewWidgetsPinned(overviewWidgetsPinned());
 }
 
 function widgetCatalogCard(item) {
@@ -589,7 +637,9 @@ function initOverviewGrid() {
   }, gridEl);
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
   overviewGrid.on('change', () => persistOverviewGrid());
+  setOverviewWidgetsPinned(overviewWidgetsPinned());
 }
+
 
 function addOverviewWidget(widget, { save = true } = {}) {
   const catalog = overviewWidgetCatalogItem(widget.type);
@@ -653,6 +703,15 @@ function bookmarkInitial(title = '') {
   return escapeHtml((title || '?').trim().slice(0, 2).toUpperCase());
 }
 
+function bookmarkFaviconUrl(url = '') {
+  try {
+    const parsed = new URL(safeUrl(url));
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(parsed.hostname)}&sz=64`;
+  } catch (_) {
+    return '';
+  }
+}
+
 function readBookmarks() {
   try {
     const saved = JSON.parse(localStorage.getItem('overviewBookmarks') || 'null');
@@ -668,7 +727,11 @@ function writeBookmarks(bookmarks) {
 function bookmarksHtml() {
   const rows = readBookmarks();
   return `<div class="bookmark-widget">
-    <div class="bookmark-icon-grid">${rows.map((item) => `<article class="bookmark-icon-card"><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.title)}"><span>${bookmarkInitial(item.title)}</span><strong>${escapeHtml(item.title)}</strong></a><button class="icon-button danger" data-delete-bookmark="${escapeHtml(item.id)}" title="Delete bookmark">×</button></article>`).join('')}<button class="bookmark-icon-card add-bookmark-card" data-toggle-bookmark-form="true"><span>+</span><strong>Add</strong></button></div>
+    <div class="bookmark-icon-grid">${rows.map((item) => {
+      const url = safeUrl(item.url);
+      const favicon = bookmarkFaviconUrl(url);
+      return `<article class="bookmark-icon-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.title)}">${favicon ? `<img src="${escapeHtml(favicon)}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false" />` : ''}<span ${favicon ? 'hidden' : ''}>${bookmarkInitial(item.title)}</span><strong>${escapeHtml(item.title)}</strong></a><button class="icon-button danger" data-delete-bookmark="${escapeHtml(item.id)}" title="Delete bookmark">×</button></article>`;
+    }).join('')}<button class="bookmark-icon-card add-bookmark-card" data-toggle-bookmark-form="true"><span>+</span><strong>Add</strong></button></div>
     <form class="bookmark-form" hidden>
       <input name="title" placeholder="Site name" />
       <input name="url" placeholder="example.com" />
@@ -678,14 +741,30 @@ function bookmarksHtml() {
 }
 
 
+function metricWidgetInfo(type) {
+  return OVERVIEW_METRIC_WIDGETS.find((item) => item.type === type);
+}
+
 function systemMonitorHtml() {
   return `<div class="system-monitor-widget" id="overview-system-monitor">${metricsHtml(metrics)}</div>`;
 }
 
+function metricWidgetHtml(type) {
+  const info = metricWidgetInfo(type);
+  if (!info) return '<div class="empty">Metric unavailable</div>';
+  return `<div class="single-metric-widget" data-metric-widget="${escapeHtml(type)}">${metricCardHtml(info.metric)}</div>`;
+}
+
+function metricCardHtml(metricId) {
+  if (!metrics) return '<div class="empty">Metric loading…</div>';
+  return METRIC_BUILDERS[metricId] ? METRIC_BUILDERS[metricId](metrics) : '<div class="empty">Metric unavailable</div>';
+}
+
 function evaluateCalculatorExpression(expression) {
-  const cleaned = String(expression || '').replace(/[×]/g, '*').replace(/[÷]/g, '/').trim();
-  if (!cleaned) return '';
-  if (!/^[\d\s+\-*/().%]+$/.test(cleaned)) return 'Invalid expression';
+  const raw = String(expression || '').replace(/[×]/g, '*').replace(/[÷]/g, '/').trim();
+  if (!raw) return '';
+  if (!/^[\d\s+\-*/().%^]+$/.test(raw)) return 'Invalid expression';
+  const cleaned = raw.replace(/\^/g, '**');
   try {
     const value = Function(`"use strict"; return (${cleaned})`)();
     return Number.isFinite(Number(value)) ? String(value) : 'Invalid expression';
@@ -696,6 +775,7 @@ function evaluateCalculatorExpression(expression) {
 
 function widgetBodyHtml(type, widget = {}) {
   if (type === 'system-monitor') return systemMonitorHtml();
+  if (metricWidgetInfo(type)) return metricWidgetHtml(type);
   if (type === 'web-search') return `<form class="widget-search-form"><input type="search" placeholder="Search Google…" /><button class="button primary" type="submit">Go</button></form>`;
   if (type === 'app-launcher') return `<div id="overview-app-grid" class="app-grid overview-grid"></div>`;
   if (type === 'clock') return `<div class="clock-widget"><strong data-clock-time>--:--</strong><small data-clock-date>—</small></div>`;
@@ -720,11 +800,13 @@ function hydrateWidget(id, type) {
   const root = document.querySelector(`[data-widget-id="${CSS.escape(id)}"]`);
   if (!root) return;
   if (type === 'system-monitor') root.querySelector('.system-monitor-widget').innerHTML = metricsHtml(metrics);
+  if (metricWidgetInfo(type)) root.querySelector('.single-metric-widget').innerHTML = metricCardHtml(metricWidgetInfo(type).metric);
   if (type === 'app-launcher') drawOverviewApps();
   if (type === 'clock') {
     const tick = () => {
       const now = new Date();
-      root.querySelector('[data-clock-time]').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      const compact = root.getBoundingClientRect().width < 260;
+      root.querySelector('[data-clock-time]').textContent = now.toLocaleTimeString([], compact ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit', second: '2-digit' });
       root.querySelector('[data-clock-date]').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     };
     tick();
@@ -765,7 +847,7 @@ async function renderWeather(el) {
 
 function calculatorHtml() {
   return `<form class="calculator-widget">
-    <input name="expression" type="text" inputmode="decimal" autocomplete="off" placeholder="Type a calculation, e.g. 4+5" />
+    <input name="expression" type="text" inputmode="decimal" autocomplete="off" placeholder="Type a calculation" />
     <output data-calc-result>—</output>
   </form>`;
 }
@@ -1846,6 +1928,7 @@ function configureRefreshIntervals() {
         const metricsEl = document.querySelector('#metrics');
         if (metricsEl) metricsEl.innerHTML = metricsHtml(metrics);
         document.querySelectorAll('.system-monitor-widget').forEach((el) => { el.innerHTML = metricsHtml(metrics); });
+        document.querySelectorAll('.single-metric-widget[data-metric-widget]').forEach((el) => { const info = metricWidgetInfo(el.dataset.metricWidget); if (info) el.innerHTML = metricCardHtml(info.metric); });
       }
     } catch (_) {}
   }, preferenceNumber(refresh.metrics_seconds, 5, 5, 30));
@@ -1975,6 +2058,7 @@ contentEl.addEventListener('input', (event) => {
 contentEl.addEventListener('click', async (event) => {
   const manager = document.querySelector('#widget-manager');
   if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) manager.hidden = true;
+  if (!event.target.closest('.bookmark-widget')) document.querySelectorAll('.bookmark-form:not([hidden])').forEach((form) => { form.hidden = true; });
   const deleteButton = event.target.closest('[data-delete-widget]');
   if (deleteButton && overviewGrid) {
     const widget = deleteButton.closest('.grid-stack-item');
@@ -2005,6 +2089,10 @@ contentEl.addEventListener('click', async (event) => {
         try { frame.contentWindow.history[action](); } catch (_) {}
       }
     }
+    return;
+  }
+  if (event.target.closest('[data-pin-widgets]')) {
+    setOverviewWidgetsPinned(!overviewWidgetsPinned());
     return;
   }
   if (event.target.closest('[data-add-widget]')) {
