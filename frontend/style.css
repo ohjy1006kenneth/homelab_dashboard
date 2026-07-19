@@ -655,3 +655,17 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
   .webview-toolbar { grid-template-columns: repeat(3, auto) minmax(0, 1fr); }
   .webview-toolbar .button.primary { grid-column: 1 / -1; }
 }
+
+
+/* Overview iteration: system widgets, spacing, quiet calculator */
+.grid-stack { margin-inline: -6px; }
+.grid-stack > .grid-stack-item > .grid-stack-item-content { inset: 8px !important; }
+.system-monitor-widget { height: 100%; display: grid; align-items: stretch; }
+.system-monitor-widget .metrics-grid { height: 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.system-monitor-widget .metric-card { min-height: 0; padding: 12px; }
+.system-monitor-widget .metric-card strong { font-size: clamp(20px, 2.2vw, 28px); }
+.calculator-widget { height: 100%; display: grid; align-content: center; gap: 12px; padding: 6px; }
+.calculator-widget input { width: 100%; border-radius: 999px; text-align: left; font: 20px var(--font-mono); padding: 14px 18px; }
+.calculator-widget output { display: block; min-height: 48px; border: 1px solid var(--border-soft); border-radius: 999px; background: #080808; padding: 12px 18px; font: 500 24px var(--font-mono); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.widget-manager:not([hidden]) { animation: popover-in 120ms ease-out; }
+@keyframes popover-in { from { opacity: 0; transform: translate(-50%, 8px) scale(.98); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }

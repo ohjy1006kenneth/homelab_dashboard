@@ -15,6 +15,7 @@ const navLinks = [...document.querySelectorAll('nav a')];
 const ALL_ROUTES = ['overview', 'apps', 'news', 'stocks', 'settings'];
 const DEFAULT_METRICS = ['cpu', 'ram', 'root', 'uptime', 'codex'];
 const OVERVIEW_WIDGET_CATALOG = [
+  { type: 'system-monitor', title: 'System Monitor', category: 'Homelab', w: 8, h: 2 },
   { type: 'web-search', title: 'Web Search', category: 'Utility', w: 6, h: 2 },
   { type: 'app-launcher', title: 'Server Apps', category: 'Homelab', w: 8, h: 4 },
   { type: 'webview', title: 'Webview', category: 'Web', w: 6, h: 5 },
@@ -25,10 +26,11 @@ const OVERVIEW_WIDGET_CATALOG = [
   { type: 'calculator', title: 'Calculator', category: 'Utility', w: 4, h: 4 },
 ];
 const DEFAULT_OVERVIEW_WIDGETS = [
-  { id: 'search', type: 'web-search', x: 0, y: 0, w: 8, h: 2 },
+  { id: 'system', type: 'system-monitor', x: 0, y: 0, w: 8, h: 2 },
+  { id: 'search', type: 'web-search', x: 0, y: 2, w: 8, h: 2 },
   { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 2 },
-  { id: 'apps', type: 'app-launcher', x: 0, y: 2, w: 8, h: 4 },
-  { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 4, url: 'https://chatgpt.com/' },
+  { id: 'apps', type: 'app-launcher', x: 0, y: 4, w: 8, h: 4 },
+  { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 5, url: 'https://chatgpt.com/' },
   { id: 'bookmarks', type: 'bookmarks', x: 0, y: 10, w: 5, h: 4 },
   { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 3 },
   { id: 'calendar', type: 'calendar', x: 4, y: 6, w: 4, h: 4 },
@@ -580,7 +582,7 @@ function initOverviewGrid() {
   overviewGrid = GridStack.init({
     column: 12,
     cellHeight: 82,
-    margin: 10,
+    margin: 16,
     float: false,
     resizable: { handles: 'e, se, s, sw, w' },
     draggable: { handle: '.widget-drag-handle' },
@@ -676,7 +678,24 @@ function bookmarksHtml() {
 }
 
 
+function systemMonitorHtml() {
+  return `<div class="system-monitor-widget" id="overview-system-monitor">${metricsHtml(metrics)}</div>`;
+}
+
+function evaluateCalculatorExpression(expression) {
+  const cleaned = String(expression || '').replace(/[×]/g, '*').replace(/[÷]/g, '/').trim();
+  if (!cleaned) return '';
+  if (!/^[\d\s+\-*/().%]+$/.test(cleaned)) return 'Invalid expression';
+  try {
+    const value = Function(`"use strict"; return (${cleaned})`)();
+    return Number.isFinite(Number(value)) ? String(value) : 'Invalid expression';
+  } catch (_) {
+    return '';
+  }
+}
+
 function widgetBodyHtml(type, widget = {}) {
+  if (type === 'system-monitor') return systemMonitorHtml();
   if (type === 'web-search') return `<form class="widget-search-form"><input type="search" placeholder="Search Google…" /><button class="button primary" type="submit">Go</button></form>`;
   if (type === 'app-launcher') return `<div id="overview-app-grid" class="app-grid overview-grid"></div>`;
   if (type === 'clock') return `<div class="clock-widget"><strong data-clock-time>--:--</strong><small data-clock-date>—</small></div>`;
@@ -700,6 +719,7 @@ function widgetBodyHtml(type, widget = {}) {
 function hydrateWidget(id, type) {
   const root = document.querySelector(`[data-widget-id="${CSS.escape(id)}"]`);
   if (!root) return;
+  if (type === 'system-monitor') root.querySelector('.system-monitor-widget').innerHTML = metricsHtml(metrics);
   if (type === 'app-launcher') drawOverviewApps();
   if (type === 'clock') {
     const tick = () => {
@@ -744,9 +764,12 @@ async function renderWeather(el) {
 }
 
 function calculatorHtml() {
-  return `<div class="calculator-widget"><input data-calc-display readonly value="0" />
-    <div>${['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+','C'].map((key) => `<button class="button secondary" data-calc-key="${key}">${key}</button>`).join('')}</div></div>`;
+  return `<form class="calculator-widget">
+    <input name="expression" type="text" inputmode="decimal" autocomplete="off" placeholder="Type a calculation, e.g. 4+5" />
+    <output data-calc-result>—</output>
+  </form>`;
 }
+
 
 function drawOverviewApps() {
   const gridEl = document.querySelector('#overview-app-grid');
@@ -1822,6 +1845,7 @@ function configureRefreshIntervals() {
       if (currentRoute === 'overview') {
         const metricsEl = document.querySelector('#metrics');
         if (metricsEl) metricsEl.innerHTML = metricsHtml(metrics);
+        document.querySelectorAll('.system-monitor-widget').forEach((el) => { el.innerHTML = metricsHtml(metrics); });
       }
     } catch (_) {}
   }, preferenceNumber(refresh.metrics_seconds, 5, 5, 30));
@@ -1941,9 +1965,16 @@ contentEl.addEventListener('drop', async (event) => {
 
 contentEl.addEventListener('input', (event) => {
   if (event.target.closest('#overview-search')) drawOverviewApps();
+  const calc = event.target.closest('.calculator-widget');
+  if (calc) {
+    const expression = calc.querySelector('[name="expression"]')?.value || '';
+    calc.querySelector('[data-calc-result]').textContent = evaluateCalculatorExpression(expression) || '—';
+  }
 });
 
 contentEl.addEventListener('click', async (event) => {
+  const manager = document.querySelector('#widget-manager');
+  if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) manager.hidden = true;
   const deleteButton = event.target.closest('[data-delete-widget]');
   if (deleteButton && overviewGrid) {
     const widget = deleteButton.closest('.grid-stack-item');
@@ -1986,17 +2017,6 @@ contentEl.addEventListener('click', async (event) => {
     const type = catalogButton.dataset.widgetType;
     const item = overviewWidgetCatalogItem(type);
     addOverviewWidget({ id: `${type}-${Date.now()}`, type, w: item.w, h: item.h });
-    return;
-  }
-  const calcButton = event.target.closest('[data-calc-key]');
-  if (calcButton) {
-    const display = calcButton.closest('.calculator-widget')?.querySelector('[data-calc-display]');
-    if (!display) return;
-    const key = calcButton.dataset.calcKey;
-    if (key === 'C') display.value = '0';
-    else if (key === '=') {
-      try { display.value = String(Function(`"use strict"; return (${display.value})`)()); } catch (_) { display.value = 'Error'; }
-    } else display.value = display.value === '0' || display.value === 'Error' ? key : display.value + key;
     return;
   }
   const overviewAdd = event.target.closest('[data-overview-add]');
