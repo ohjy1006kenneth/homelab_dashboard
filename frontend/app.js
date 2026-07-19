@@ -17,9 +17,6 @@ const DEFAULT_METRICS = ['cpu', 'ram', 'root', 'uptime', 'codex'];
 const OVERVIEW_WIDGET_CATALOG = [
   { type: 'web-search', title: 'Web Search', category: 'Utility', w: 6, h: 2 },
   { type: 'app-launcher', title: 'Server Apps', category: 'Homelab', w: 8, h: 4 },
-  { type: 'ai-chatgpt', title: 'ChatGPT', category: 'AI', w: 6, h: 5 },
-  { type: 'ai-claude', title: 'Claude', category: 'AI', w: 6, h: 5 },
-  { type: 'ai-gemini', title: 'Gemini', category: 'AI', w: 6, h: 5 },
   { type: 'webview', title: 'Webview', category: 'Web', w: 6, h: 5 },
   { type: 'bookmarks', title: 'Bookmarks', category: 'Web', w: 5, h: 4 },
   { type: 'clock', title: 'Clock', category: 'Utility', w: 3, h: 2 },
@@ -31,7 +28,7 @@ const DEFAULT_OVERVIEW_WIDGETS = [
   { id: 'search', type: 'web-search', x: 0, y: 0, w: 8, h: 2 },
   { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 2 },
   { id: 'apps', type: 'app-launcher', x: 0, y: 2, w: 8, h: 4 },
-  { id: 'chatgpt', type: 'ai-chatgpt', x: 8, y: 2, w: 4, h: 4 },
+  { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 4, url: 'https://chatgpt.com/' },
   { id: 'bookmarks', type: 'bookmarks', x: 0, y: 10, w: 5, h: 4 },
   { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 3 },
   { id: 'calendar', type: 'calendar', x: 4, y: 6, w: 4, h: 4 },
@@ -41,7 +38,7 @@ const WIDGET_URLS = {
   'ai-chatgpt': 'https://chatgpt.com/',
   'ai-claude': 'https://claude.ai/',
   'ai-gemini': 'https://gemini.google.com/',
-  webview: 'https://www.google.com/webhp?igu=1',
+  webview: 'https://chatgpt.com/',
 };
 const DEFAULT_BOOKMARKS = [
   { id: 'github', title: 'GitHub', url: 'https://github.com/' },
@@ -516,13 +513,23 @@ function updateNav() {
 }
 
 function overviewWidgetCatalogItem(type) {
-  return OVERVIEW_WIDGET_CATALOG.find((item) => item.type === type) || OVERVIEW_WIDGET_CATALOG[0];
+  return OVERVIEW_WIDGET_CATALOG.find((item) => item.type === type)
+    || (WIDGET_URLS[type] ? OVERVIEW_WIDGET_CATALOG.find((item) => item.type === 'webview') : null)
+    || OVERVIEW_WIDGET_CATALOG[0];
+}
+
+function normalizeOverviewWidget(widget) {
+  if (!widget || typeof widget !== 'object') return widget;
+  if (WIDGET_URLS[widget.type] && widget.type !== 'webview') {
+    return { ...widget, type: 'webview', url: WIDGET_URLS[widget.type] };
+  }
+  return widget;
 }
 
 function readOverviewWidgets() {
   try {
     const saved = JSON.parse(localStorage.getItem('overviewWidgets') || 'null');
-    if (Array.isArray(saved) && saved.length) return saved;
+    if (Array.isArray(saved) && saved.length) return saved.map(normalizeOverviewWidget);
   } catch (_) {}
   return DEFAULT_OVERVIEW_WIDGETS.map((item) => ({ ...item }));
 }
@@ -614,6 +621,36 @@ function persistOverviewGrid() {
   writeOverviewWidgets(widgets);
 }
 
+function safeUrl(value, fallback = WIDGET_URLS.webview) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return fallback;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function readWebviewUrls() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('overviewWebviewUrls') || '{}');
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeWebviewUrl(id, url) {
+  const urls = readWebviewUrls();
+  urls[id] = safeUrl(url);
+  localStorage.setItem('overviewWebviewUrls', JSON.stringify(urls));
+}
+
+function webviewUrlFor(widget = {}) {
+  const urls = readWebviewUrls();
+  return urls[widget.id] || widget.url || WIDGET_URLS[widget.type] || WIDGET_URLS.webview;
+}
+
+function bookmarkInitial(title = '') {
+  return escapeHtml((title || '?').trim().slice(0, 2).toUpperCase());
+}
+
 function readBookmarks() {
   try {
     const saved = JSON.parse(localStorage.getItem('overviewBookmarks') || 'null');
@@ -629,14 +666,15 @@ function writeBookmarks(bookmarks) {
 function bookmarksHtml() {
   const rows = readBookmarks();
   return `<div class="bookmark-widget">
-    <form class="bookmark-form">
+    <div class="bookmark-icon-grid">${rows.map((item) => `<article class="bookmark-icon-card"><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.title)}"><span>${bookmarkInitial(item.title)}</span><strong>${escapeHtml(item.title)}</strong></a><button class="icon-button danger" data-delete-bookmark="${escapeHtml(item.id)}" title="Delete bookmark">×</button></article>`).join('')}<button class="bookmark-icon-card add-bookmark-card" data-toggle-bookmark-form="true"><span>+</span><strong>Add</strong></button></div>
+    <form class="bookmark-form" hidden>
       <input name="title" placeholder="Site name" />
-      <input name="url" placeholder="https://example.com" />
+      <input name="url" placeholder="example.com" />
       <button class="button primary" type="submit">Add</button>
     </form>
-    <div class="bookmark-list">${rows.map((item) => `<article class="bookmark-row"><a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.url)}</small></a><button class="icon-button danger" data-delete-bookmark="${escapeHtml(item.id)}">×</button></article>`).join('')}</div>
   </div>`;
 }
+
 
 function widgetBodyHtml(type, widget = {}) {
   if (type === 'web-search') return `<form class="widget-search-form"><input type="search" placeholder="Search Google…" /><button class="button primary" type="submit">Go</button></form>`;
@@ -646,8 +684,17 @@ function widgetBodyHtml(type, widget = {}) {
   if (type === 'weather') return `<div class="weather-widget" data-weather-widget><strong>Weather</strong><small>Loading…</small></div>`;
   if (type === 'calculator') return calculatorHtml();
   if (type === 'bookmarks') return bookmarksHtml();
-  const url = WIDGET_URLS[type] || WIDGET_URLS.webview;
-  return `<div class="webview-widget"><iframe src="${escapeHtml(url)}" title="${escapeHtml(type)}" loading="lazy"></iframe><a class="button" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Open</a></div>`;
+  const url = webviewUrlFor({ ...widget, type });
+  return `<div class="webview-widget" data-webview-widget="true">
+    <form class="webview-toolbar">
+      <button class="button secondary" type="button" data-webview-action="back">←</button>
+      <button class="button secondary" type="button" data-webview-action="forward">→</button>
+      <button class="button secondary" type="button" data-webview-action="refresh">↻</button>
+      <input name="url" value="${escapeHtml(url)}" placeholder="https://example.com" />
+      <button class="button primary" type="submit">Go</button>
+    </form>
+    <iframe src="${escapeHtml(url)}" title="${escapeHtml(type)}" loading="lazy"></iframe>
+  </div>`;
 }
 
 function hydrateWidget(id, type) {
@@ -1911,6 +1958,24 @@ contentEl.addEventListener('click', async (event) => {
     if (body) body.innerHTML = bookmarksHtml();
     return;
   }
+  if (event.target.closest('[data-toggle-bookmark-form]')) {
+    const form = event.target.closest('.bookmark-widget')?.querySelector('.bookmark-form');
+    if (form) form.hidden = !form.hidden;
+    return;
+  }
+  const webviewAction = event.target.closest('[data-webview-action]');
+  if (webviewAction) {
+    const widget = webviewAction.closest('[data-webview-widget]');
+    const frame = widget?.querySelector('iframe');
+    const action = webviewAction.dataset.webviewAction;
+    if (frame) {
+      if (action === 'refresh') frame.src = frame.src;
+      else {
+        try { frame.contentWindow.history[action](); } catch (_) {}
+      }
+    }
+    return;
+  }
   if (event.target.closest('[data-add-widget]')) {
     const manager = document.querySelector('#widget-manager');
     if (manager) manager.hidden = !manager.hidden;
@@ -2066,6 +2131,15 @@ contentEl.addEventListener('submit', (event) => {
     event.preventDefault();
     const query = event.target.querySelector('input[type="search"]')?.value?.trim();
     if (query) window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  if (event.target.classList.contains('webview-toolbar')) {
+    event.preventDefault();
+    const widget = event.target.closest('[data-widget-id]');
+    const frame = event.target.closest('[data-webview-widget]')?.querySelector('iframe');
+    const url = safeUrl(new FormData(event.target).get('url'));
+    if (widget) writeWebviewUrl(widget.dataset.widgetId, url);
+    if (frame) frame.src = url;
     return;
   }
   if (event.target.classList.contains('bookmark-form')) {
