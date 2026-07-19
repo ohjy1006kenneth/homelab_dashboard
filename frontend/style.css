@@ -830,3 +830,33 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
   -webkit-box-orient: vertical;
   font-size: 11px;
 }
+
+
+/* Overview iteration: full-width bottom hover chrome for every widget */
+.overview-widget .overview-widget-head {
+  top: auto;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: auto;
+  max-width: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  transform: translateY(7px);
+}
+.overview-widget:hover .overview-widget-head,
+.overview-widget:focus-within .overview-widget-head {
+  transform: translateY(0);
+}
+.overview-widget[data-widget-type='webview'] .overview-widget-head,
+.overview-widget[data-widget-type='calculator'] .overview-widget-head {
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: auto;
+  max-width: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.overview-widget[data-widget-type='webview'] .overview-widget-body,
+.overview-widget[data-widget-type='calculator'] .overview-widget-body {
+  padding: 12px;
+}
