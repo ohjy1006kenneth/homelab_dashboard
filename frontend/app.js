@@ -33,6 +33,7 @@ const OVERVIEW_WIDGET_CATALOG = [
   { type: 'calendar', title: 'Calendar', category: 'Utility', w: 4, h: 4 },
   { type: 'weather', title: 'Weather', category: 'Utility', w: 4, h: 3 },
   { type: 'calculator', title: 'Calculator', category: 'Utility', w: 4, h: 4 },
+  { type: 'memo', title: 'Memo', category: 'Utility', w: 4, h: 3 },
 ];
 const DEFAULT_OVERVIEW_WIDGETS = [
   { id: 'metric-cpu', type: 'metric-cpu', x: 0, y: 0, w: 3, h: 2 },
@@ -46,6 +47,7 @@ const DEFAULT_OVERVIEW_WIDGETS = [
   { id: 'weather', type: 'weather', x: 5, y: 8, w: 3, h: 3 },
   { id: 'calendar', type: 'calendar', x: 8, y: 7, w: 4, h: 4 },
   { id: 'calculator', type: 'calculator', x: 5, y: 11, w: 4, h: 3 },
+  { id: 'memo', type: 'memo', x: 9, y: 11, w: 3, h: 3 },
 ];
 const WIDGET_URLS = {
   'ai-chatgpt': 'https://chatgpt.com/',
@@ -600,7 +602,7 @@ function renderOverview() {
   contentEl.innerHTML = `<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
     <section class="widget-manager panel" id="widget-manager" hidden>
       <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add widgets</h2></div></div>
-      <div class="widget-catalog">${OVERVIEW_WIDGET_CATALOG.map(widgetCatalogCard).join('')}</div>
+      <div class="widget-catalog">${widgetCatalogHtml()}</div>
     </section>
     <nav class="overview-floating-nav" aria-label="Overview controls">
       <form class="overview-web-search" id="overview-search-form">
@@ -614,9 +616,20 @@ function renderOverview() {
   setOverviewWidgetsPinned(overviewWidgetsPinned());
 }
 
+function widgetCatalogHtml() {
+  const groups = OVERVIEW_WIDGET_CATALOG.reduce((acc, item) => {
+    const category = item.category || 'Other';
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(item);
+    return acc;
+  }, {});
+  const order = ['System', 'Homelab', 'Web', 'Utility', 'Other'];
+  return order.filter((category) => groups[category]).map((category) => `<section class="widget-catalog-group"><h3>${escapeHtml(category)}</h3><div class="widget-catalog-row">${groups[category].map(widgetCatalogCard).join('')}</div></section>`).join('');
+}
+
 function widgetCatalogCard(item) {
   return `<button class="widget-catalog-card" data-widget-type="${escapeHtml(item.type)}">
-    <span>${escapeHtml(item.category)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.w)}×${escapeHtml(item.h)}</small>
+    <strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.w)}×${escapeHtml(item.h)}</small>
   </button>`;
 }
 
@@ -773,6 +786,14 @@ function evaluateCalculatorExpression(expression) {
   }
 }
 
+function memoValue(id = 'memo') {
+  return localStorage.getItem(`overviewMemo:${id}`) || '';
+}
+
+function memoHtml(widget = {}) {
+  return `<textarea class="memo-widget" data-memo-widget="true" placeholder="Write a memo…">${escapeHtml(memoValue(widget.id || 'memo'))}</textarea>`;
+}
+
 function widgetBodyHtml(type, widget = {}) {
   if (type === 'system-monitor') return systemMonitorHtml();
   if (metricWidgetInfo(type)) return metricWidgetHtml(type);
@@ -783,6 +804,7 @@ function widgetBodyHtml(type, widget = {}) {
   if (type === 'weather') return `<div class="weather-widget" data-weather-widget><strong>Weather</strong><small>Loading…</small></div>`;
   if (type === 'calculator') return calculatorHtml();
   if (type === 'bookmarks') return bookmarksHtml();
+  if (type === 'memo') return memoHtml(widget);
   const url = webviewUrlFor({ ...widget, type });
   return `<div class="webview-widget" data-webview-widget="true">
     <form class="webview-toolbar">
@@ -2052,6 +2074,11 @@ contentEl.addEventListener('input', (event) => {
   if (calc) {
     const expression = calc.querySelector('[name="expression"]')?.value || '';
     calc.querySelector('[data-calc-result]').textContent = evaluateCalculatorExpression(expression) || '—';
+  }
+  const memo = event.target.closest('[data-memo-widget]');
+  if (memo) {
+    const widget = memo.closest('[data-widget-id]');
+    localStorage.setItem(`overviewMemo:${widget?.dataset.widgetId || 'memo'}`, memo.value);
   }
 });
 
