@@ -860,3 +860,47 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .overview-widget[data-widget-type='calculator'] .overview-widget-body {
   padding: 12px;
 }
+
+
+/* Overview iteration: keep resize handles on the top/side away from bottom chrome */
+.grid-stack-item .ui-resizable-s,
+.grid-stack-item .ui-resizable-se,
+.grid-stack-item .ui-resizable-sw {
+  display: none !important;
+  pointer-events: none !important;
+}
+.grid-stack-item .ui-resizable-n,
+.grid-stack-item .ui-resizable-ne,
+.grid-stack-item .ui-resizable-nw,
+.grid-stack-item .ui-resizable-e,
+.grid-stack-item .ui-resizable-w {
+  z-index: 6 !important;
+}
+.grid-stack-item .ui-resizable-n {
+  top: 3px !important;
+  left: 50% !important;
+  width: 30px !important;
+  height: 8px !important;
+  margin-left: -15px !important;
+  border-radius: 999px;
+  background: rgba(255,255,255,.32);
+}
+.grid-stack-item .ui-resizable-ne,
+.grid-stack-item .ui-resizable-nw {
+  top: 3px !important;
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.28);
+  background: rgba(5,5,5,.72);
+  backdrop-filter: blur(8px);
+}
+.grid-stack-item .ui-resizable-ne { right: 6px !important; }
+.grid-stack-item .ui-resizable-nw { left: 6px !important; }
+.grid-stack-item .ui-resizable-e,
+.grid-stack-item .ui-resizable-w {
+  top: 18px !important;
+  bottom: auto !important;
+  height: calc(100% - 64px) !important;
+  min-height: 24px;
+}

@@ -645,7 +645,7 @@ function initOverviewGrid() {
     cellHeight: 82,
     margin: 16,
     float: false,
-    resizable: { handles: 'e, se, s, sw, w' },
+    resizable: { handles: 'n, ne, nw, e, w' },
     draggable: { handle: '.widget-drag-handle' },
   }, gridEl);
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
