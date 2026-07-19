@@ -14,16 +14,35 @@ const modalEl = document.querySelector('#app-modal');
 const navLinks = [...document.querySelectorAll('nav a')];
 const ALL_ROUTES = ['overview', 'apps', 'news', 'stocks', 'settings'];
 const DEFAULT_METRICS = ['cpu', 'ram', 'root', 'uptime', 'codex'];
-const OVERVIEW_WEB_WIDGETS = [
-  { id: 'chatgpt', title: 'ChatGPT', url: 'https://chatgpt.com/', description: 'OpenAI assistant workspace', icon: '◎', group: 'AI workspaces', embed: false },
-  { id: 'claude', title: 'Claude', url: 'https://claude.ai/', description: 'Anthropic Claude chat', icon: '◇', group: 'AI workspaces', embed: false },
-  { id: 'gemini', title: 'Gemini', url: 'https://gemini.google.com/', description: 'Google Gemini chat', icon: '✦', group: 'AI workspaces', embed: false },
-  { id: 'perplexity', title: 'Perplexity', url: 'https://www.perplexity.ai/', description: 'Answer engine and research', icon: '⌕', group: 'AI workspaces', embed: false },
+const OVERVIEW_WIDGET_CATALOG = [
+  { type: 'web-search', title: 'Web Search', category: 'Utility', w: 6, h: 2 },
+  { type: 'app-launcher', title: 'App Launcher', category: 'Homelab', w: 8, h: 4 },
+  { type: 'ai-chatgpt', title: 'ChatGPT', category: 'AI', w: 6, h: 5 },
+  { type: 'ai-claude', title: 'Claude', category: 'AI', w: 6, h: 5 },
+  { type: 'ai-gemini', title: 'Gemini', category: 'AI', w: 6, h: 5 },
+  { type: 'webview', title: 'Webview', category: 'Web', w: 6, h: 5 },
+  { type: 'clock', title: 'Clock', category: 'Utility', w: 3, h: 2 },
+  { type: 'calendar', title: 'Calendar', category: 'Utility', w: 4, h: 4 },
+  { type: 'weather', title: 'Weather', category: 'Utility', w: 4, h: 3 },
+  { type: 'calculator', title: 'Calculator', category: 'Utility', w: 4, h: 4 },
 ];
-const OVERVIEW_SAMPLE_BOOKMARKS = [
-  { id: 'github', title: 'GitHub', url: 'https://github.com/', description: 'Code, projects, and repos', icon: 'GH', group: 'Developer' },
-  { id: 'huggingface', title: 'Hugging Face', url: 'https://huggingface.co/', description: 'Models, papers, and datasets', icon: 'HF', group: 'AI resources' },
+const DEFAULT_OVERVIEW_WIDGETS = [
+  { id: 'search', type: 'web-search', x: 0, y: 0, w: 8, h: 2 },
+  { id: 'clock', type: 'clock', x: 8, y: 0, w: 4, h: 2 },
+  { id: 'apps', type: 'app-launcher', x: 0, y: 2, w: 8, h: 4 },
+  { id: 'chatgpt', type: 'ai-chatgpt', x: 8, y: 2, w: 4, h: 4 },
+  { id: 'weather', type: 'weather', x: 0, y: 6, w: 4, h: 3 },
+  { id: 'calendar', type: 'calendar', x: 4, y: 6, w: 4, h: 4 },
+  { id: 'calculator', type: 'calculator', x: 8, y: 6, w: 4, h: 4 },
 ];
+const WIDGET_URLS = {
+  'ai-chatgpt': 'https://chatgpt.com/',
+  'ai-claude': 'https://claude.ai/',
+  'ai-gemini': 'https://gemini.google.com/',
+  webview: 'https://www.google.com/webhp?igu=1',
+};
+let overviewGrid = null;
+let overviewWidgetTimers = [];
 
 let apps = [];
 let metrics = null;
@@ -489,138 +508,179 @@ function updateNav() {
   titleEl.textContent = ({ overview: 'Overview', apps: 'Apps', news: 'Newsletters', stocks: 'Stocks', settings: 'Settings' })[currentRoute];
 }
 
+function overviewWidgetCatalogItem(type) {
+  return OVERVIEW_WIDGET_CATALOG.find((item) => item.type === type) || OVERVIEW_WIDGET_CATALOG[0];
+}
+
+function readOverviewWidgets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('overviewWidgets') || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch (_) {}
+  return DEFAULT_OVERVIEW_WIDGETS.map((item) => ({ ...item }));
+}
+
+function writeOverviewWidgets(widgets) {
+  localStorage.setItem('overviewWidgets', JSON.stringify(widgets));
+}
+
+function cleanupOverviewWidgets() {
+  overviewWidgetTimers.forEach((timer) => clearInterval(timer));
+  overviewWidgetTimers = [];
+  if (overviewGrid) {
+    overviewGrid.destroy(false);
+    overviewGrid = null;
+  }
+}
+
 function renderOverview() {
-  contentEl.innerHTML = `<section class="overview-hero panel">
-      <div class="overview-hero-copy">
-        <p class="eyebrow">Browser home + homelab launchpad</p>
-        <h2>Open local services, AI workspaces, and bookmarks from your laptop.</h2>
-        <p class="section-copy">Frontend prototype only: webpage widgets are previewed here without backend persistence until you approve the direction.</p>
-      </div>
-      <form class="overview-search" id="overview-search-form">
-        <input id="overview-search" type="search" placeholder="Search apps, bookmarks, widgets, or web…" autocomplete="off" />
-        <button class="button primary" type="submit">Search web</button>
+  cleanupOverviewWidgets();
+  contentEl.innerHTML = `<section class="overview-board-head">
+      <form class="overview-web-search" id="overview-search-form">
+        <input id="overview-search" type="search" placeholder="Search the web…" autocomplete="off" />
+        <button class="button primary" type="submit">Search</button>
       </form>
+      <div class="overview-board-actions">
+        <button class="button secondary" data-widget-manager="true">Manage widgets</button>
+        <button class="button secondary" data-add-widget="true">Add widget</button>
+      </div>
     </section>
-    <div id="metrics" class="metrics-grid">${metricsHtml(metrics)}</div>
-    <section class="overview-layout">
-      <div class="overview-main" id="overview-main-sections"></div>
-      <aside class="overview-widgets" id="overview-widget-rail"></aside>
+    <section class="widget-manager panel" id="widget-manager" hidden>
+      <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add or remove widgets</h2></div></div>
+      <div class="widget-catalog">${OVERVIEW_WIDGET_CATALOG.map(widgetCatalogCard).join('')}</div>
     </section>
-    <section class="panel overview-customize-preview">
-      <div class="panel-head manager-head">
-        <div>
-          <p class="eyebrow">Customize preview</p>
-          <h2>What backend approval will unlock</h2>
-          <p class="section-copy">Add webpage widgets/bookmarks, create groups, reorder tiles, and sync the layout across laptop and phone.</p>
-        </div>
-        <button class="button secondary" data-toggle-overview-picker="true">Customize pinned apps</button>
-      </div>
-      <div class="overview-customize-grid">
-        <article><strong>+ Webpage widget</strong><small>ChatGPT, Claude, Gemini, school portals, docs, or any URL.</small></article>
-        <article><strong>+ App group</strong><small>Favorites, Media, Network, Storage, AI, or custom sections.</small></article>
-        <article><strong>+ Layout controls</strong><small>Reorder groups and tiles, then save to the Pi backend after approval.</small></article>
-      </div>
-      <div class="overview-picker" hidden>
-        <div class="panel-head compact-head"><div><p class="eyebrow">Available apps</p><h2>Pin or unpin overview apps</h2></div></div>
-        <div id="available-app-list" class="available-app-list"></div>
-      </div>
-    </section>`;
-  drawOverviewApps();
+    <section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>`;
+  initOverviewGrid();
 }
 
-function groupBy(items, getKey) {
-  return items.reduce((groups, item) => {
-    const key = getKey(item) || 'Other';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(item);
-    return groups;
-  }, {});
+function widgetCatalogCard(item) {
+  return `<button class="widget-catalog-card" data-widget-type="${escapeHtml(item.type)}">
+    <span>${escapeHtml(item.category)}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.w)}×${escapeHtml(item.h)}</small>
+  </button>`;
 }
 
-function matchesOverviewQuery(item, query) {
-  if (!query) return true;
-  const haystack = `${item.name || item.title || ''} ${item.description || ''} ${item.id || ''} ${item.group || ''} ${item.category || ''}`.toLowerCase();
-  return haystack.includes(query);
+function initOverviewGrid() {
+  const gridEl = document.querySelector('#overview-widget-grid');
+  if (!gridEl || !window.GridStack) {
+    if (gridEl) gridEl.innerHTML = '<div class="empty">Widget grid library is loading. Refresh once if this stays visible.</div>';
+    return;
+  }
+  const widgets = readOverviewWidgets();
+  overviewGrid = GridStack.init({
+    column: 12,
+    cellHeight: 82,
+    margin: 10,
+    float: false,
+    resizable: { handles: 'e, se, s, sw, w' },
+    draggable: { handle: '.widget-drag-handle' },
+  }, gridEl);
+  widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
+  overviewGrid.on('change', () => persistOverviewGrid());
 }
 
-function webIconHtml(item) {
-  const icon = escapeHtml(item.icon || fallbackInitial(item.title));
-  return `<div class="web-icon">${icon}</div>`;
+function addOverviewWidget(widget, { save = true } = {}) {
+  const catalog = overviewWidgetCatalogItem(widget.type);
+  const id = widget.id || `${widget.type}-${Date.now()}`;
+  const node = {
+    id,
+    x: widget.x,
+    y: widget.y,
+    w: widget.w || catalog.w,
+    h: widget.h || catalog.h,
+    minW: 2,
+    minH: 2,
+    content: `<div class="overview-widget" data-widget-id="${escapeHtml(id)}" data-widget-type="${escapeHtml(widget.type)}">
+      <header class="overview-widget-head"><button class="widget-drag-handle" title="Move widget">⠿</button><strong>${escapeHtml(widget.title || catalog.title)}</strong><button class="icon-button danger" data-delete-widget="${escapeHtml(id)}" title="Delete widget">×</button></header>
+      <div class="overview-widget-body">${widgetBodyHtml(widget.type, widget)}</div>
+    </div>`,
+  };
+  overviewGrid.addWidget(node);
+  hydrateWidget(id, widget.type);
+  if (save) persistOverviewGrid();
 }
 
-function webpageCard(item) {
-  const embedNote = item.embed ? 'Embeddable webpage' : 'Opens in laptop browser';
-  return `<article class="web-card" data-overview-web-card="${escapeHtml(item.id)}">
-    ${webIconHtml(item)}
-    <div class="web-card-main">
-      <div class="app-title"><h3>${escapeHtml(item.title)}</h3><span class="service-pill unknown">Web</span></div>
-      <p>${escapeHtml(item.description || item.url)}</p>
-      <small>${escapeHtml(embedNote)}</small>
-    </div>
-    <div class="app-actions"><a class="button" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Open</a></div>
-  </article>`;
+function persistOverviewGrid() {
+  if (!overviewGrid) return;
+  const widgets = overviewGrid.engine.nodes.map((node) => {
+    const el = node.el?.querySelector('[data-widget-type]');
+    const type = el?.dataset.widgetType || 'web-search';
+    const id = el?.dataset.widgetId || node.id;
+    return { id, type, x: node.x, y: node.y, w: node.w, h: node.h };
+  });
+  writeOverviewWidgets(widgets);
 }
 
-function overviewWidgetCard(item) {
-  const canFrame = item.embed;
-  return `<article class="overview-widget-card">
-    <div class="widget-card-head">
-      ${webIconHtml(item)}
-      <div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.url)}</small></div>
-    </div>
-    ${canFrame ? `<iframe title="${escapeHtml(item.title)}" src="${escapeHtml(item.url)}" loading="lazy"></iframe>` : `<div class="widget-placeholder"><strong>${escapeHtml(item.title)}</strong><p>Most AI sites block iframe embeds, so this widget acts as a fast launch card that opens locally on your laptop.</p><a class="button" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Open ${escapeHtml(item.title)}</a></div>`}
-  </article>`;
+function widgetBodyHtml(type, widget = {}) {
+  if (type === 'web-search') return `<form class="widget-search-form"><input type="search" placeholder="Search Google…" /><button class="button primary" type="submit">Go</button></form>`;
+  if (type === 'app-launcher') return `<div id="overview-app-grid" class="app-grid overview-grid"></div>`;
+  if (type === 'clock') return `<div class="clock-widget"><strong data-clock-time>--:--</strong><small data-clock-date>—</small></div>`;
+  if (type === 'calendar') return `<div class="calendar-widget" data-calendar-widget></div>`;
+  if (type === 'weather') return `<div class="weather-widget" data-weather-widget><strong>Weather</strong><small>Loading…</small></div>`;
+  if (type === 'calculator') return calculatorHtml();
+  const url = WIDGET_URLS[type] || WIDGET_URLS.webview;
+  return `<div class="webview-widget"><iframe src="${escapeHtml(url)}" title="${escapeHtml(type)}" loading="lazy"></iframe><a class="button" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">Open</a></div>`;
 }
 
-function overviewSection(title, subtitle, bodyHtml, extraClass = '') {
-  return `<section class="panel overview-section ${extraClass}">
-    <div class="panel-head compact-head"><div><p class="eyebrow">${escapeHtml(subtitle)}</p><h2>${escapeHtml(title)}</h2></div></div>
-    ${bodyHtml}
-  </section>`;
+function hydrateWidget(id, type) {
+  const root = document.querySelector(`[data-widget-id="${CSS.escape(id)}"]`);
+  if (!root) return;
+  if (type === 'app-launcher') drawOverviewApps();
+  if (type === 'clock') {
+    const tick = () => {
+      const now = new Date();
+      root.querySelector('[data-clock-time]').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      root.querySelector('[data-clock-date]').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+    };
+    tick();
+    overviewWidgetTimers.push(setInterval(tick, 1000));
+  }
+  if (type === 'calendar') renderCalendar(root.querySelector('[data-calendar-widget]'));
+  if (type === 'weather') renderWeather(root.querySelector('[data-weather-widget]'));
+}
+
+function renderCalendar(el) {
+  if (!el) return;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const first = new Date(year, month, 1);
+  const days = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i += 1) cells.push('<span></span>');
+  for (let day = 1; day <= days; day += 1) cells.push(`<strong class="${day === now.getDate() ? 'today' : ''}">${day}</strong>`);
+  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>`;
+}
+
+async function renderWeather(el) {
+  if (!el) return;
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      if (!navigator.geolocation) { reject(new Error('No location')); return; }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000, maximumAge: 900000 });
+    });
+    const { latitude, longitude } = pos.coords;
+    const data = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`).then((res) => res.json());
+    const c = data.current || {};
+    el.innerHTML = `<strong>${Math.round(c.temperature_2m)}°C</strong><small>${Math.round(c.relative_humidity_2m)}% humidity · ${Math.round(c.wind_speed_10m)} km/h wind</small>`;
+  } catch (_) {
+    el.innerHTML = '<strong>Weather</strong><small>Allow location to show local weather.</small>';
+  }
+}
+
+function calculatorHtml() {
+  return `<div class="calculator-widget"><input data-calc-display readonly value="0" />
+    <div>${['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+','C'].map((key) => `<button class="button secondary" data-calc-key="${key}">${key}</button>`).join('')}</div></div>`;
 }
 
 function drawOverviewApps() {
-  const mainEl = document.querySelector('#overview-main-sections');
-  const widgetEl = document.querySelector('#overview-widget-rail');
+  const gridEl = document.querySelector('#overview-app-grid');
   const availableEl = document.querySelector('#available-app-list');
-  if (!mainEl || !widgetEl) return;
-  const query = (document.querySelector('#overview-search')?.value || '').trim().toLowerCase();
-  const selected = overviewApps().filter((app) => matchesOverviewQuery(app, query));
-  const remainingApps = apps.filter((app) => !overviewAppIds().includes(app.id) && matchesOverviewQuery(app, query));
-  const appGroups = groupBy(remainingApps, (app) => app.category || 'Apps');
-  const webWidgets = OVERVIEW_WEB_WIDGETS.filter((item) => matchesOverviewQuery(item, query));
-  const bookmarks = OVERVIEW_SAMPLE_BOOKMARKS.filter((item) => matchesOverviewQuery(item, query));
-  const sections = [];
-
-  sections.push(overviewSection(
-    'Favorites',
-    'Pinned apps',
-    `<div id="overview-app-grid" class="app-grid overview-grid">${selected.length ? selected.map((app) => appCard(app)).join('') : '<div class="empty">No pinned apps match this search. Use Customize pinned apps to choose favorites.</div>'}</div>`
-  ));
-
-  if (webWidgets.length) {
-    sections.push(overviewSection(
-      'AI workspaces',
-      'Webpage widgets',
-      `<div class="web-grid">${webWidgets.map(webpageCard).join('')}</div>`,
-      'featured-section'
-    ));
-  }
-
-  Object.entries(appGroups).sort(([a], [b]) => a.localeCompare(b)).forEach(([category, rows]) => {
-    if (!rows.length) return;
-    sections.push(overviewSection(category, 'Service group', `<div class="app-grid overview-grid">${rows.slice(0, 8).map((app) => appCard(app)).join('')}</div>`));
-  });
-
-  if (bookmarks.length) {
-    sections.push(overviewSection('Bookmarks', 'Web links', `<div class="web-grid compact-web-grid">${bookmarks.map(webpageCard).join('')}</div>`));
-  }
-
-  mainEl.innerHTML = sections.length ? sections.join('') : '<div class="empty">No apps, widgets, or bookmarks match this search.</div>';
-  widgetEl.innerHTML = `<section class="panel overview-section sticky-widgets">
-      <div class="panel-head compact-head"><div><p class="eyebrow">Widget rail</p><h2>Webpage widgets</h2></div></div>
-      <div class="widget-stack">${OVERVIEW_WEB_WIDGETS.slice(0, 3).map(overviewWidgetCard).join('')}</div>
-    </section>`;
+  if (!gridEl) return;
+  const selectedIds = overviewAppIds();
+  const selected = selectedIds.length ? overviewApps() : apps.slice(0, 8);
+  gridEl.innerHTML = selected.length
+    ? selected.map((app) => appCard(app)).join('')
+    : '<div class="empty">No apps available.</div>';
   if (availableEl) availableEl.innerHTML = apps.length ? apps.map(overviewPickerItem).join('') : '<div class="empty compact">No apps available.</div>';
 }
 
@@ -1278,6 +1338,7 @@ function renderPlaceholder(route) {
 
 function render() {
   updateNav();
+  if (currentRoute !== 'overview') cleanupOverviewWidgets();
   if (currentRoute === 'overview') renderOverview();
   else if (currentRoute === 'apps') renderAppsPage();
   else if (currentRoute === 'news') renderNewsPage();
@@ -1807,6 +1868,36 @@ contentEl.addEventListener('input', (event) => {
 });
 
 contentEl.addEventListener('click', async (event) => {
+  if (event.target.closest('[data-widget-manager], [data-add-widget]')) {
+    const manager = document.querySelector('#widget-manager');
+    if (manager) manager.hidden = !manager.hidden;
+    return;
+  }
+  const catalogButton = event.target.closest('[data-widget-type]');
+  if (catalogButton && overviewGrid) {
+    const type = catalogButton.dataset.widgetType;
+    const item = overviewWidgetCatalogItem(type);
+    addOverviewWidget({ id: `${type}-${Date.now()}`, type, w: item.w, h: item.h });
+    return;
+  }
+  const deleteButton = event.target.closest('[data-delete-widget]');
+  if (deleteButton && overviewGrid) {
+    const widget = deleteButton.closest('.grid-stack-item');
+    if (widget) overviewGrid.removeWidget(widget);
+    persistOverviewGrid();
+    return;
+  }
+  const calcButton = event.target.closest('[data-calc-key]');
+  if (calcButton) {
+    const display = calcButton.closest('.calculator-widget')?.querySelector('[data-calc-display]');
+    if (!display) return;
+    const key = calcButton.dataset.calcKey;
+    if (key === 'C') display.value = '0';
+    else if (key === '=') {
+      try { display.value = String(Function(`"use strict"; return (${display.value})`)()); } catch (_) { display.value = 'Error'; }
+    } else display.value = display.value === '0' || display.value === 'Error' ? key : display.value + key;
+    return;
+  }
   const overviewAdd = event.target.closest('[data-overview-add]');
   if (overviewAdd) {
     await setOverviewAppIds([...overviewAppIds(), overviewAdd.dataset.overviewAdd]);
@@ -1935,9 +2026,9 @@ modalEl.addEventListener('submit', (event) => {
 });
 
 contentEl.addEventListener('submit', (event) => {
-  if (event.target.id === 'overview-search-form') {
+  if (event.target.id === 'overview-search-form' || event.target.classList.contains('widget-search-form')) {
     event.preventDefault();
-    const query = event.target.querySelector('#overview-search')?.value?.trim();
+    const query = event.target.querySelector('input[type="search"]')?.value?.trim();
     if (query) window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank', 'noopener,noreferrer');
     return;
   }

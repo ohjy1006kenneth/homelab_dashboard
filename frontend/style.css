@@ -549,3 +549,53 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
   .web-card .app-actions { grid-column: 1 / -1; width: 100%; }
   .web-card .button { width: 100%; }
 }
+
+
+/* Movable/resizable Overview widgets */
+.overview-board-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.overview-web-search { display: flex; gap: 8px; min-width: 0; }
+.overview-web-search input[type='search'] { width: 100%; min-height: 46px; border-radius: 999px; background: #050505; padding: 0 16px; }
+.overview-web-search .button, .overview-board-actions .button { min-height: 46px; border-radius: 999px; white-space: nowrap; }
+.overview-board-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.widget-manager[hidden] { display: none; }
+.widget-catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.widget-catalog-card { appearance: none; text-align: left; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-base); color: var(--text-primary); padding: 12px; display: grid; gap: 6px; cursor: pointer; }
+.widget-catalog-card:hover { background: var(--bg-hover); border-color: #444; }
+.widget-catalog-card span, .widget-catalog-card small { color: var(--text-secondary); font: 11px var(--font-mono); }
+.overview-widget-grid { min-height: 720px; }
+.grid-stack > .grid-stack-item > .grid-stack-item-content { inset: 0 !important; overflow: hidden; border-radius: var(--r-md); }
+.overview-widget { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+.overview-widget-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 38px; padding: 8px 10px; border-bottom: 1px solid var(--border-soft); background: #0c0c0c; }
+.overview-widget-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.widget-drag-handle { appearance: none; border: 1px solid var(--border); border-radius: var(--r-sm); background: #070707; color: var(--text-secondary); cursor: grab; padding: 4px 7px; }
+.widget-drag-handle:active { cursor: grabbing; }
+.overview-widget-body { min-height: 0; overflow: auto; padding: 12px; }
+.webview-widget { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
+.webview-widget iframe { width: 100%; height: 100%; min-height: 160px; border: 1px solid var(--border); border-radius: var(--r-sm); background: #050505; }
+.widget-search-form { height: 100%; display: flex; gap: 8px; align-items: center; }
+.widget-search-form input { flex: 1; min-width: 0; background: #050505; color: var(--text-primary); border: 1px solid var(--border); border-radius: 999px; padding: 12px 14px; outline: none; }
+.clock-widget { height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
+.clock-widget strong { font: 500 clamp(28px, 5vw, 56px) var(--font-mono); letter-spacing: -.06em; }
+.clock-widget small { color: var(--text-secondary); }
+.calendar-widget { display: grid; gap: 12px; }
+.calendar-widget header { color: var(--text-primary); }
+.calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center; }
+.calendar-days span { color: var(--text-muted); font: 11px var(--font-mono); }
+.calendar-days strong { display: grid; place-items: center; min-height: 30px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: #080808; font: 12px var(--font-mono); }
+.calendar-days strong.today { color: #050505; background: var(--accent); border-color: var(--accent); }
+.weather-widget { height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
+.weather-widget strong { font: 500 38px var(--font-mono); }
+.weather-widget small { color: var(--text-secondary); line-height: 1.45; }
+.calculator-widget { display: grid; gap: 10px; }
+.calculator-widget input { width: 100%; background: #050505; color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px; text-align: right; font: 22px var(--font-mono); }
+.calculator-widget div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.calculator-widget [data-calc-key='C'] { grid-column: 1 / -1; color: #fca5a5; border-color: rgba(239,68,68,.35); }
+.overview-widget .app-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.overview-widget .app-card { grid-template-columns: 40px minmax(0, 1fr); }
+.overview-widget .app-actions { grid-column: 1 / -1; flex-wrap: wrap; }
+@media (max-width: 820px) {
+  .overview-board-head { grid-template-columns: 1fr; }
+  .overview-board-actions { justify-content: stretch; }
+  .overview-board-actions .button { flex: 1 1 auto; }
+  .widget-search-form { flex-direction: column; align-items: stretch; }
+}
