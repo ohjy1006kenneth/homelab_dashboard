@@ -774,3 +774,59 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .nav-glyph-plus::after { transform: rotate(90deg); }
 .nav-glyph-pin::before { content: ''; position: absolute; left: 8px; top: 2px; width: 8px; height: 12px; border: 2px solid currentColor; border-bottom: 0; border-radius: 4px 4px 1px 1px; transform: rotate(42deg); }
 .nav-glyph-pin::after { content: ''; position: absolute; left: 10px; top: 12px; width: 2px; height: 9px; background: currentColor; border-radius: 999px; transform: rotate(42deg); transform-origin: top center; }
+
+
+/* Overview iteration: input widgets avoid hover chrome collisions */
+.overview-widget[data-widget-type='webview'] .overview-widget-body {
+  padding: 12px;
+  overflow: hidden;
+}
+.overview-widget[data-widget-type='webview'] .overview-widget-head,
+.overview-widget[data-widget-type='calculator'] .overview-widget-head {
+  top: auto;
+  left: auto;
+  right: 8px;
+  bottom: 8px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  grid-template-columns: auto minmax(0, auto) auto;
+}
+.overview-widget[data-widget-type='calculator'] .overview-widget-body {
+  overflow: hidden;
+}
+.overview-widget[data-widget-type='webview'] .webview-widget {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+.overview-widget[data-widget-type='webview'] .webview-toolbar {
+  min-height: 38px;
+}
+.overview-widget[data-widget-type='webview'] .webview-widget iframe {
+  min-height: 0;
+  height: 100%;
+}
+.single-metric-widget { overflow: hidden; }
+.single-metric-widget .metric-card {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 5px;
+  padding: 12px;
+}
+.single-metric-widget .metric-card strong {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(21px, 3.2vw, 34px);
+}
+.single-metric-widget .metric-card small {
+  min-width: 0;
+  max-height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 11px;
+}
