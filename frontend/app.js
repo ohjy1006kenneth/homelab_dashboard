@@ -949,31 +949,67 @@ async function renderCalendar(el) {
   el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
 }
 
+function weatherLabel(location) {
+  return [location.city, location.region || location.country].filter(Boolean).join(', ') || 'This device location';
+}
+
+async function fetchClientWeatherLocation({ refresh = false } = {}) {
+  const cacheKey = 'overviewClientWeatherLocation';
+  if (!refresh) {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+      if (cached?.latitude && cached?.longitude && Date.now() - Number(cached.saved_at || 0) < 30 * 60 * 1000) return cached;
+    } catch (_) {}
+  }
+  const providers = [
+    {
+      url: 'https://ipwho.is/',
+      parse: (data) => ({ latitude: data.latitude, longitude: data.longitude, city: data.city, region: data.region, country: data.country, source: 'ipwho.is' }),
+    },
+    {
+      url: 'https://ipapi.co/json/',
+      parse: (data) => ({ latitude: data.latitude, longitude: data.longitude, city: data.city, region: data.region, country: data.country_name, source: 'ipapi.co' }),
+    },
+  ];
+  const errors = [];
+  for (const provider of providers) {
+    try {
+      const response = await fetch(provider.url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${provider.url} HTTP ${response.status}`);
+      const parsed = provider.parse(await response.json());
+      const latitude = Number(parsed.latitude);
+      const longitude = Number(parsed.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error(`${provider.url} did not return coordinates`);
+      const location = { ...parsed, latitude, longitude, label: weatherLabel(parsed), saved_at: Date.now() };
+      sessionStorage.setItem(cacheKey, JSON.stringify(location));
+      return location;
+    } catch (error) {
+      errors.push(error.message || String(error));
+    }
+  }
+  throw new Error(`Client location unavailable: ${errors.join('; ')}`);
+}
+
 async function saveBrowserWeatherLocation(button) {
   const widget = button?.closest('[data-weather-widget]');
   if (!widget) return;
-  if (!navigator.geolocation) {
-    widget.innerHTML = '<strong>Weather</strong><small>This browser does not support location.</small>';
-    return;
-  }
-  widget.innerHTML = '<strong>Weather</strong><small>Reading browser location…</small>';
+  widget.innerHTML = '<strong>Weather</strong><small>Reading this device location…</small>';
   try {
-    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 900000 }));
-    const { latitude, longitude } = pos.coords;
-    await api('/api/overview/weather/location', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ latitude, longitude, label: 'Browser location' }) });
-    if (overviewConfig) overviewConfig.weather = { latitude, longitude, label: 'Browser location' };
-    await renderWeather(widget);
+    sessionStorage.removeItem('overviewClientWeatherLocation');
+    await renderWeather(widget, { refreshLocation: true });
   } catch (error) {
-    widget.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Location permission failed')}</small><button class="button secondary" data-weather-location="true">Try again</button>`;
+    widget.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Client location failed')}</small><button class="button secondary" data-weather-location="true">Try again</button>`;
   }
 }
 
-async function renderWeather(el) {
+async function renderWeather(el, { refreshLocation = false } = {}) {
   if (!el) return;
+  el.innerHTML = '<strong>Weather</strong><small>Detecting this device…</small>';
   try {
-    const data = await api('/api/overview/weather');
-    if (!data.ok || data.needs_location) {
-      el.innerHTML = '<strong>Weather</strong><small>Set location once to sync weather across devices.</small><button class="button secondary" data-weather-location="true">Use my location</button>';
+    const location = await fetchClientWeatherLocation({ refresh: refreshLocation });
+    const data = await api(`/api/overview/weather?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`);
+    if (!data.ok) {
+      el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(data.message || 'Weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
       return;
     }
     const c = data.current || {};
@@ -984,9 +1020,10 @@ async function renderWeather(el) {
     const high = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(daily.temperature_2m_max[0]) : null;
     const low = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(daily.temperature_2m_min[0]) : null;
     const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
-    el.innerHTML = `<strong>${temp}</strong><small>${humidity} · ${wind}${range}</small><small>${escapeHtml(data.location?.label || data.timezone || 'Local weather')}</small>`;
+    const label = weatherLabel(location);
+    el.innerHTML = `<strong>${temp}</strong><small>${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small>`;
   } catch (error) {
-    el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Weather unavailable')}</small><button class="button secondary" data-weather-location="true">Set location</button>`;
+    el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Client weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
   }
 }
 
