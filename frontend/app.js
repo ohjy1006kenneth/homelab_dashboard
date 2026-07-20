@@ -919,6 +919,19 @@ function hydrateWidget(id, type) {
   if (type === 'weather') renderWeather(root.querySelector('[data-weather-widget]'));
 }
 
+function calendarSetupHtml(state = {}) {
+  const hasClient = Boolean(state.client_secret_present);
+  return `<div class="calendar-auth" data-calendar-auth>
+    <small>${hasClient ? 'OAuth client saved. Connect your Google account.' : 'Paste your Google OAuth client JSON once, then connect your account.'}</small>
+    <textarea data-google-client-secret placeholder='Paste OAuth client JSON from Google Cloud Console'></textarea>
+    <div class="calendar-auth-actions">
+      <button class="button secondary" type="button" data-google-client-save>Save client</button>
+      <button class="button primary" type="button" data-google-calendar-connect ${hasClient ? '' : 'disabled'}>Connect Google</button>
+    </div>
+    <small data-google-calendar-status>${escapeHtml(state.message || 'Google Calendar is not connected.')}</small>
+  </div>`;
+}
+
 async function renderCalendar(el) {
   if (!el) return;
   const now = new Date();
@@ -932,23 +945,68 @@ async function renderCalendar(el) {
   let eventsHtml = '<small>Loading Google Calendar…</small>';
   try {
     const calendar = await api('/api/overview/calendar?days=31');
+    const auth = calendar.google_calendar || {};
     const events = Array.isArray(calendar.events) ? calendar.events.slice(0, 4) : [];
-    if (calendar.google_calendar?.connected && events.length) {
+    if (auth.connected && events.length) {
       eventsHtml = `<div class="calendar-events">${events.map((event) => {
         const startValue = event.start?.dateTime || event.start?.date || '';
         const start = startValue ? new Date(startValue) : null;
         const label = start && !Number.isNaN(start.getTime()) ? start.toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Soon';
         return `<a href="${escapeHtml(event.htmlLink || '#')}" target="_blank" rel="noreferrer"><span>${escapeHtml(label)}</span><strong>${escapeHtml(event.summary || 'Untitled')}</strong></a>`;
-      }).join('')}</div>`;
-    } else if (calendar.google_calendar?.connected) {
-      eventsHtml = '<small>No upcoming Google Calendar events.</small>';
+      }).join('')}<button class="button secondary calendar-disconnect" type="button" data-google-calendar-disconnect>Disconnect</button></div>`;
+    } else if (auth.connected) {
+      eventsHtml = '<div class="calendar-events"><small>No upcoming Google Calendar events.</small><button class="button secondary calendar-disconnect" type="button" data-google-calendar-disconnect>Disconnect</button></div>';
     } else {
-      eventsHtml = '<small>Google Calendar not connected. Set up OAuth on the Pi to sync events.</small>';
+      eventsHtml = calendarSetupHtml(auth);
     }
   } catch (error) {
     eventsHtml = `<small>Calendar sync unavailable: ${escapeHtml(error.message)}</small>`;
   }
-  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
+  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong><button class="button secondary" type="button" data-google-calendar-refresh>Refresh</button></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
+}
+
+async function saveGoogleCalendarClient(button) {
+  const auth = button.closest('[data-calendar-auth]');
+  const status = auth?.querySelector('[data-google-calendar-status]');
+  const textarea = auth?.querySelector('[data-google-client-secret]');
+  const value = textarea?.value.trim() || '';
+  if (!value) {
+    if (status) status.textContent = 'Paste the OAuth client JSON first.';
+    return;
+  }
+  if (status) status.textContent = 'Saving OAuth client…';
+  try {
+    await api('/api/overview/google-calendar/client-secret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_secret_json: value }) });
+    const widget = button.closest('[data-calendar-widget]');
+    await renderCalendar(widget);
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Could not save OAuth client.';
+  }
+}
+
+async function connectGoogleCalendar(button) {
+  const auth = button.closest('[data-calendar-auth]');
+  const status = auth?.querySelector('[data-google-calendar-status]');
+  if (status) status.textContent = 'Opening Google sign-in…';
+  try {
+    const result = await api('/api/overview/google-calendar/auth-url', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirect_uri: `${window.location.origin}/api/overview/google-calendar/callback` }) });
+    window.open(result.auth_url, '_blank', 'noopener,noreferrer');
+    if (status) status.textContent = 'Finish Google sign-in in the new tab, then click Refresh.';
+  } catch (error) {
+    if (status) status.textContent = error.message || 'Could not start Google sign-in.';
+  }
+}
+
+async function refreshCalendarWidget(button) {
+  const widget = button.closest('[data-calendar-widget]');
+  if (widget) await renderCalendar(widget);
+}
+
+async function disconnectGoogleCalendar(button) {
+  if (!window.confirm('Disconnect Google Calendar from this dashboard?')) return;
+  await api('/api/overview/google-calendar/disconnect', { method: 'POST' });
+  const widget = button.closest('[data-calendar-widget]');
+  if (widget) await renderCalendar(widget);
 }
 
 function weatherLabel(location) {
@@ -2315,6 +2373,26 @@ contentEl.addEventListener('click', async (event) => {
         try { frame.contentWindow.history[action](); } catch (_) {}
       }
     }
+    return;
+  }
+  const googleClientSave = event.target.closest('[data-google-client-save]');
+  if (googleClientSave) {
+    await saveGoogleCalendarClient(googleClientSave);
+    return;
+  }
+  const googleConnect = event.target.closest('[data-google-calendar-connect]');
+  if (googleConnect) {
+    await connectGoogleCalendar(googleConnect);
+    return;
+  }
+  const googleRefresh = event.target.closest('[data-google-calendar-refresh]');
+  if (googleRefresh) {
+    await refreshCalendarWidget(googleRefresh);
+    return;
+  }
+  const googleDisconnect = event.target.closest('[data-google-calendar-disconnect]');
+  if (googleDisconnect) {
+    await disconnectGoogleCalendar(googleDisconnect);
     return;
   }
   const weatherLocation = event.target.closest('[data-weather-location]');

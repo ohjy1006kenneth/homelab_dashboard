@@ -1042,3 +1042,14 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 @container (min-width: 430px) and (min-height: 260px) {
   .weather-hourly { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+
+/* Overview Google Calendar OAuth UI */
+.calendar-widget header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calendar-widget header .button { min-height: 26px; padding: 4px 8px; font-size: 11px; }
+.calendar-auth { display: grid; gap: 7px; min-height: 0; overflow: hidden; }
+.calendar-auth textarea { width: 100%; min-height: 58px; max-height: 120px; resize: vertical; border: 1px solid var(--border-soft); border-radius: 10px; background: #050505; color: var(--text); padding: 8px; font: 11px var(--font-mono); }
+.calendar-auth-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.calendar-auth-actions .button { flex: 1 1 110px; min-height: 32px; padding: 7px 10px; }
+.calendar-auth small { color: var(--text-secondary); line-height: 1.35; }
+.calendar-disconnect { margin-top: 2px; justify-self: start; min-height: 30px; padding: 6px 10px; }

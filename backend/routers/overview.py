@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import requests
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from backend.database import PROJECT_DIR
 
 router = APIRouter(prefix="/api/overview", tags=["overview"])
 CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
+GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 DEFAULT_BOOKMARKS = [
     {"id": "github", "title": "GitHub", "url": "https://github.com/"},
@@ -58,6 +62,14 @@ class WeatherLocation(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     label: str | None = None
 
+class GoogleClientSecretPayload(BaseModel):
+    client_secret_json: str | dict[str, Any]
+
+
+class GoogleAuthUrlPayload(BaseModel):
+    redirect_uri: str | None = None
+
+
 
 def _deepcopy(value: Any) -> Any:
     return json.loads(json.dumps(value))
@@ -89,9 +101,45 @@ def _overview(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     return overview
 
 
-def _token_paths() -> tuple[Path, Path]:
+def _google_paths() -> tuple[Path, Path, Path]:
     hermes_home = Path(os.environ.get("HERMES_HOME", "/home/juyoungoh/.hermes"))
-    return hermes_home / "google_token.json", hermes_home / "google_client_secret.json"
+    hermes_home.mkdir(parents=True, exist_ok=True)
+    return hermes_home / "google_token.json", hermes_home / "google_client_secret.json", hermes_home / "google_oauth_pending_dashboard.json"
+
+
+def _token_paths() -> tuple[Path, Path]:
+    token_path, client_path, _ = _google_paths()
+    return token_path, client_path
+
+
+def _safe_write_secret(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def _read_client_secret() -> dict[str, Any] | None:
+    _, client_path = _token_paths()
+    if not client_path.exists():
+        return None
+    try:
+        return json.loads(client_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def _client_oauth_config(client_secret: dict[str, Any] | None = None) -> dict[str, Any]:
+    data = client_secret or _read_client_secret()
+    if not data:
+        raise HTTPException(status_code=400, detail="Upload a Google OAuth client JSON first.")
+    cfg = data.get("web") or data.get("installed")
+    if not isinstance(cfg, dict):
+        raise HTTPException(status_code=400, detail="OAuth JSON must contain a web or installed client.")
+    if not cfg.get("client_id") or not cfg.get("client_secret"):
+        raise HTTPException(status_code=400, detail="OAuth JSON is missing client_id/client_secret.")
+    return cfg
 
 
 def _google_auth_state() -> dict[str, Any]:
@@ -100,7 +148,7 @@ def _google_auth_state() -> dict[str, Any]:
         "connected": token_path.exists(),
         "setup_required": not token_path.exists(),
         "client_secret_present": client_path.exists(),
-        "message": "Google Calendar OAuth is connected." if token_path.exists() else "Google Calendar OAuth is not connected yet.",
+        "message": "Google Calendar OAuth is connected." if token_path.exists() else "Connect Google Calendar from this widget.",
     }
 
 
@@ -244,6 +292,103 @@ def weather(latitude: float | None = Query(default=None, ge=-90, le=90), longitu
         "daily": data.get("daily", {}),
         "timezone": data.get("timezone"),
     }
+
+
+@router.post("/google-calendar/client-secret")
+def save_google_calendar_client_secret(payload: GoogleClientSecretPayload) -> dict[str, Any]:
+    raw = payload.client_secret_json
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Paste the full Google OAuth client JSON file contents.") from exc
+    else:
+        data = raw
+    _client_oauth_config(data)
+    _, client_path, _ = _google_paths()
+    _safe_write_secret(client_path, data)
+    return {"ok": True, "google_calendar": _google_auth_state()}
+
+
+@router.post("/google-calendar/auth-url")
+def google_calendar_auth_url(request: Request, payload: GoogleAuthUrlPayload | None = None) -> dict[str, Any]:
+    cfg = _client_oauth_config()
+    redirect_uri = (payload.redirect_uri if payload else None) or str(request.url_for("google_calendar_callback"))
+    state = secrets.token_urlsafe(24)
+    _, _, pending_path = _google_paths()
+    _safe_write_secret(pending_path, {"state": state, "redirect_uri": redirect_uri, "created_at": datetime.now(timezone.utc).isoformat()})
+    auth_uri = cfg.get("auth_uri") or "https://accounts.google.com/o/oauth2/v2/auth"
+    params = {
+        "client_id": cfg["client_id"],
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(GOOGLE_CALENDAR_SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+        "state": state,
+    }
+    return {"ok": True, "auth_url": f"{auth_uri}?{urlencode(params)}", "redirect_uri": redirect_uri}
+
+
+@router.get("/google-calendar/callback", name="google_calendar_callback")
+def google_calendar_callback(code: str | None = None, state: str | None = None, error: str | None = None) -> HTMLResponse:
+    if error:
+        return HTMLResponse(f"<h1>Google Calendar not connected</h1><p>{error}</p>", status_code=400)
+    if not code or not state:
+        return HTMLResponse("<h1>Google Calendar not connected</h1><p>Missing OAuth code/state.</p>", status_code=400)
+    token_path, _, pending_path = _google_paths()
+    try:
+        pending = json.loads(pending_path.read_text(encoding="utf-8"))
+    except Exception:
+        return HTMLResponse("<h1>Google Calendar not connected</h1><p>OAuth session expired. Reopen Connect Google Calendar from the dashboard.</p>", status_code=400)
+    if pending.get("state") != state:
+        return HTMLResponse("<h1>Google Calendar not connected</h1><p>OAuth state did not match. Please retry from the dashboard.</p>", status_code=400)
+    cfg = _client_oauth_config()
+    token_uri = cfg.get("token_uri") or "https://oauth2.googleapis.com/token"
+    response = requests.post(
+        token_uri,
+        data={
+            "code": code,
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "redirect_uri": pending.get("redirect_uri"),
+            "grant_type": "authorization_code",
+        },
+        timeout=15,
+    )
+    if not response.ok:
+        detail = response.text[:300]
+        return HTMLResponse(f"<h1>Google Calendar not connected</h1><p>Token exchange failed. Check that your OAuth client allows this dashboard callback URL.</p><pre>{detail}</pre>", status_code=400)
+    token = response.json()
+    if token.get("expires_in"):
+        token["expiry"] = (datetime.now(timezone.utc) + timedelta(seconds=int(token["expires_in"]))).isoformat().replace("+00:00", "Z")
+    token["token"] = token.get("access_token")
+    token["client_id"] = cfg["client_id"]
+    token["client_secret"] = cfg["client_secret"]
+    token["token_uri"] = token_uri
+    token["scopes"] = GOOGLE_CALENDAR_SCOPES
+    _safe_write_secret(token_path, token)
+    try:
+        pending_path.unlink()
+    except FileNotFoundError:
+        pass
+    return HTMLResponse("""
+<!doctype html><meta charset=\"utf-8\"><title>Google Calendar connected</title>
+<style>body{font-family:system-ui;background:#080808;color:#f5f5f5;display:grid;place-items:center;min-height:100vh;margin:0}main{max-width:520px;padding:28px;border:1px solid #333;border-radius:18px;background:#111}button{margin-top:16px;padding:10px 14px;border-radius:10px;border:1px solid #444;background:#fff;color:#000}</style>
+<main><h1>Google Calendar connected</h1><p>You can close this tab and return to the dashboard. The Calendar widget will refresh automatically or when you click Refresh.</p><button onclick=\"window.close()\">Close</button><script>try{localStorage.setItem('googleCalendarConnectedAt', String(Date.now()))}catch(e){}; setTimeout(()=>window.close(), 1800)</script></main>
+""")
+
+
+@router.post("/google-calendar/disconnect")
+def disconnect_google_calendar() -> dict[str, Any]:
+    token_path, _, pending_path = _google_paths()
+    for path in (token_path, pending_path):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    return {"ok": True, "google_calendar": _google_auth_state()}
 
 
 @router.get("/calendar")
