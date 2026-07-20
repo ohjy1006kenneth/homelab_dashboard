@@ -915,3 +915,8 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .calendar-events strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .weather-widget { align-content: center; gap: 7px; overflow: hidden; }
 .weather-widget small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+/* Overview weather setup state */
+.weather-widget .button { justify-self: center; min-height: 34px; padding: 7px 12px; }
+.weather-widget strong, .weather-widget small { min-width: 0; max-width: 100%; }

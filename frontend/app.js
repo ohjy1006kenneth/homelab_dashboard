@@ -949,29 +949,44 @@ async function renderCalendar(el) {
   el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
 }
 
+async function saveBrowserWeatherLocation(button) {
+  const widget = button?.closest('[data-weather-widget]');
+  if (!widget) return;
+  if (!navigator.geolocation) {
+    widget.innerHTML = '<strong>Weather</strong><small>This browser does not support location.</small>';
+    return;
+  }
+  widget.innerHTML = '<strong>Weather</strong><small>Reading browser location…</small>';
+  try {
+    const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 900000 }));
+    const { latitude, longitude } = pos.coords;
+    await api('/api/overview/weather/location', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ latitude, longitude, label: 'Browser location' }) });
+    if (overviewConfig) overviewConfig.weather = { latitude, longitude, label: 'Browser location' };
+    await renderWeather(widget);
+  } catch (error) {
+    widget.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Location permission failed')}</small><button class="button secondary" data-weather-location="true">Try again</button>`;
+  }
+}
+
 async function renderWeather(el) {
   if (!el) return;
-  const weatherUrl = (lat, lon) => `/api/overview/weather?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`;
   try {
-    let data = await api('/api/overview/weather');
-    if (data.needs_location && navigator.geolocation) {
-      const pos = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000, maximumAge: 900000 }));
-      const { latitude, longitude } = pos.coords;
-      api('/api/overview/weather/location', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ latitude, longitude, label: 'Browser location' }) }).catch(() => {});
-      data = await api(weatherUrl(latitude, longitude));
-    }
-    if (!data.ok) {
-      el.innerHTML = '<strong>Weather</strong><small>Allow location once to sync weather across devices.</small>';
+    const data = await api('/api/overview/weather');
+    if (!data.ok || data.needs_location) {
+      el.innerHTML = '<strong>Weather</strong><small>Set location once to sync weather across devices.</small><button class="button secondary" data-weather-location="true">Use my location</button>';
       return;
     }
     const c = data.current || {};
     const daily = data.daily || {};
-    const high = Array.isArray(daily.temperature_2m_max) ? Math.round(daily.temperature_2m_max[0]) : null;
-    const low = Array.isArray(daily.temperature_2m_min) ? Math.round(daily.temperature_2m_min[0]) : null;
+    const temp = Number.isFinite(Number(c.temperature_2m)) ? `${Math.round(c.temperature_2m)}°C` : '—';
+    const humidity = Number.isFinite(Number(c.relative_humidity_2m)) ? `${Math.round(c.relative_humidity_2m)}% humidity` : 'humidity n/a';
+    const wind = Number.isFinite(Number(c.wind_speed_10m)) ? `${Math.round(c.wind_speed_10m)} km/h wind` : 'wind n/a';
+    const high = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(daily.temperature_2m_max[0]) : null;
+    const low = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(daily.temperature_2m_min[0]) : null;
     const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
-    el.innerHTML = `<strong>${Math.round(c.temperature_2m)}°C</strong><small>${Math.round(c.relative_humidity_2m)}% humidity · ${Math.round(c.wind_speed_10m)} km/h wind${range}</small><small>${escapeHtml(data.location?.label || data.timezone || 'Local weather')}</small>`;
+    el.innerHTML = `<strong>${temp}</strong><small>${humidity} · ${wind}${range}</small><small>${escapeHtml(data.location?.label || data.timezone || 'Local weather')}</small>`;
   } catch (error) {
-    el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Weather unavailable')}</small>`;
+    el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Weather unavailable')}</small><button class="button secondary" data-weather-location="true">Set location</button>`;
   }
 }
 
@@ -2227,6 +2242,11 @@ contentEl.addEventListener('click', async (event) => {
         try { frame.contentWindow.history[action](); } catch (_) {}
       }
     }
+    return;
+  }
+  const weatherLocation = event.target.closest('[data-weather-location]');
+  if (weatherLocation) {
+    saveBrowserWeatherLocation(weatherLocation);
     return;
   }
   if (event.target.closest('[data-pin-widgets]')) {
