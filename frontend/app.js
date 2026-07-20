@@ -718,7 +718,7 @@ function initOverviewGrid() {
     cellHeight: 82,
     margin: 16,
     float: true,
-    resizable: { handles: 's, se, sw, e, w' },
+    resizable: { handles: 's,se,sw,e,w' },
     draggable: { handle: '.widget-drag-handle' },
   }, gridEl);
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
@@ -1004,6 +1004,32 @@ async function saveBrowserWeatherLocation(button) {
   }
 }
 
+
+function weatherConditionLabel(code) {
+  const value = Number(code);
+  if ([0].includes(value)) return 'Clear';
+  if ([1, 2].includes(value)) return 'Partly cloudy';
+  if ([3].includes(value)) return 'Cloudy';
+  if ([45, 48].includes(value)) return 'Fog';
+  if ([51, 53, 55, 56, 57].includes(value)) return 'Drizzle';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return 'Rain';
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return 'Snow';
+  if ([95, 96, 99].includes(value)) return 'Storm';
+  return 'Weather';
+}
+
+function hourlyWeatherItems(hourly = {}, limit = 8) {
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const temps = Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [];
+  const precipitation = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
+  const codes = Array.isArray(hourly.weather_code) ? hourly.weather_code : [];
+  const now = Date.now();
+  return times.map((time, index) => {
+    const date = new Date(time);
+    return { time, date, temp: temps[index], pop: precipitation[index], code: codes[index] };
+  }).filter((item) => item.date instanceof Date && !Number.isNaN(item.date.getTime()) && item.date.getTime() >= now - 60 * 60 * 1000).slice(0, limit);
+}
+
 async function renderWeather(el, { refreshLocation = false } = {}) {
   if (!el) return;
   el.innerHTML = '<strong>Weather</strong><small>Detecting this device…</small>';
@@ -1019,11 +1045,19 @@ async function renderWeather(el, { refreshLocation = false } = {}) {
     const temp = Number.isFinite(Number(c.temperature_2m)) ? `${Math.round(c.temperature_2m)}°C` : '—';
     const humidity = Number.isFinite(Number(c.relative_humidity_2m)) ? `${Math.round(c.relative_humidity_2m)}% humidity` : 'humidity n/a';
     const wind = Number.isFinite(Number(c.wind_speed_10m)) ? `${Math.round(c.wind_speed_10m)} km/h wind` : 'wind n/a';
+    const condition = weatherConditionLabel(c.weather_code);
     const high = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(daily.temperature_2m_max[0]) : null;
     const low = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(daily.temperature_2m_min[0]) : null;
     const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
     const label = weatherLabel(location);
-    el.innerHTML = `<strong>${temp}</strong><small>${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small>`;
+    const hourly = hourlyWeatherItems(data.hourly, 8);
+    const hourlyHtml = hourly.length ? `<div class="weather-hourly" aria-label="Hourly forecast">${hourly.map((item) => {
+      const hour = item.date.toLocaleTimeString([], { hour: 'numeric' });
+      const itemTemp = Number.isFinite(Number(item.temp)) ? `${Math.round(item.temp)}°` : '—';
+      const pop = Number.isFinite(Number(item.pop)) ? `${Math.round(item.pop)}%` : '—';
+      return `<article><span>${escapeHtml(hour)}</span><strong>${escapeHtml(itemTemp)}</strong><small>${escapeHtml(weatherConditionLabel(item.code))} · ${escapeHtml(pop)}</small></article>`;
+    }).join('')}</div>` : '';
+    el.innerHTML = `<div class="weather-current"><strong>${temp}</strong><small>${escapeHtml(condition)} · ${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small></div>${hourlyHtml}`;
   } catch (error) {
     el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Client weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
   }

@@ -227,6 +227,7 @@ def weather(latitude: float | None = Query(default=None, ge=-90, le=90), longitu
             "latitude": lat,
             "longitude": lon,
             "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+            "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
             "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
             "timezone": "auto",
             "forecast_days": 3,
@@ -235,7 +236,14 @@ def weather(latitude: float | None = Query(default=None, ge=-90, le=90), longitu
     )
     response.raise_for_status()
     data = response.json()
-    return {"ok": True, "location": {"latitude": lat, "longitude": lon, "label": saved.get("label") or "Local weather"}, "current": data.get("current", {}), "daily": data.get("daily", {}), "timezone": data.get("timezone")}
+    return {
+        "ok": True,
+        "location": {"latitude": lat, "longitude": lon, "label": saved.get("label") or "Local weather"},
+        "current": data.get("current", {}),
+        "hourly": data.get("hourly", {}),
+        "daily": data.get("daily", {}),
+        "timezone": data.get("timezone"),
+    }
 
 
 @router.get("/calendar")

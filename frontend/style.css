@@ -979,3 +979,66 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
   height: auto !important;
   min-height: 24px;
 }
+
+
+/* Overview iteration: visible bottom resize handles and hourly weather */
+.grid-stack-item .ui-resizable-handle { opacity: 0 !important; pointer-events: none !important; }
+.grid-stack-item:hover .ui-resizable-handle,
+.grid-stack-item:focus-within .ui-resizable-handle { opacity: 1 !important; pointer-events: auto !important; }
+.grid-stack-item .ui-resizable-n,
+.grid-stack-item .ui-resizable-ne,
+.grid-stack-item .ui-resizable-nw { display: none !important; pointer-events: none !important; }
+.grid-stack-item .ui-resizable-s,
+.grid-stack-item .ui-resizable-se,
+.grid-stack-item .ui-resizable-sw,
+.grid-stack-item .ui-resizable-e,
+.grid-stack-item .ui-resizable-w { display: block !important; visibility: visible !important; z-index: 10 !important; }
+.grid-stack-item .ui-resizable-s,
+.grid-stack-item:hover .ui-resizable-s,
+.grid-stack-item:focus-within .ui-resizable-s {
+  bottom: 3px !important;
+  top: auto !important;
+  left: 50% !important;
+  width: 42px !important;
+  height: 10px !important;
+  margin-left: -21px !important;
+  cursor: ns-resize !important;
+  border-radius: 999px;
+  background: rgba(255,255,255,.4);
+}
+.grid-stack-item .ui-resizable-se,
+.grid-stack-item .ui-resizable-sw,
+.grid-stack-item:hover .ui-resizable-se,
+.grid-stack-item:hover .ui-resizable-sw,
+.grid-stack-item:focus-within .ui-resizable-se,
+.grid-stack-item:focus-within .ui-resizable-sw {
+  bottom: 4px !important;
+  top: auto !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.36);
+  background: rgba(5,5,5,.76);
+  backdrop-filter: blur(8px);
+}
+.grid-stack-item .ui-resizable-se { right: 6px !important; cursor: se-resize !important; }
+.grid-stack-item .ui-resizable-sw { left: 6px !important; cursor: sw-resize !important; }
+.grid-stack-item .ui-resizable-e,
+.grid-stack-item .ui-resizable-w { top: 48px !important; bottom: 22px !important; height: auto !important; min-height: 24px; }
+.weather-widget { container-type: size; padding: 2px; }
+.weather-current { display: grid; justify-items: center; gap: 6px; min-width: 0; }
+.weather-current strong { font: 500 clamp(30px, 8cqw, 48px) var(--font-mono); letter-spacing: -.06em; }
+.weather-current small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weather-hourly { display: none; width: 100%; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; overflow: hidden; }
+.weather-hourly article { min-width: 0; display: grid; gap: 3px; justify-items: center; border: 1px solid var(--border-soft); border-radius: 12px; background: #080808; padding: 7px 6px; }
+.weather-hourly span { color: var(--text-muted); font: 10px var(--font-mono); }
+.weather-hourly strong { font: 600 16px var(--font-mono); }
+.weather-hourly small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 10px; }
+@container (min-width: 300px) and (min-height: 230px) {
+  .weather-widget { align-content: stretch; place-items: stretch; }
+  .weather-current { align-content: center; }
+  .weather-hourly { display: grid; align-self: end; }
+}
+@container (min-width: 430px) and (min-height: 260px) {
+  .weather-hourly { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
