@@ -42,7 +42,7 @@ const DEFAULT_OVERVIEW_WIDGETS = [
   { id: 'clock', type: 'clock', x: 9, y: 0, w: 3, h: 2 },
   { id: 'search', type: 'web-search', x: 0, y: 2, w: 6, h: 2 },
   { id: 'apps', type: 'app-launcher', x: 0, y: 4, w: 8, h: 4 },
-  { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 5, url: 'https://chatgpt.com/' },
+  { id: 'webview', type: 'webview', x: 8, y: 2, w: 4, h: 5 },
   { id: 'bookmarks', type: 'bookmarks', x: 0, y: 8, w: 5, h: 4 },
   { id: 'weather', type: 'weather', x: 5, y: 8, w: 3, h: 3 },
   { id: 'calendar', type: 'calendar', x: 8, y: 7, w: 4, h: 4 },
@@ -53,7 +53,7 @@ const WIDGET_URLS = {
   'ai-chatgpt': 'https://chatgpt.com/',
   'ai-claude': 'https://claude.ai/',
   'ai-gemini': 'https://gemini.google.com/',
-  webview: 'https://chatgpt.com/',
+  webview: '',
 };
 const DEFAULT_BOOKMARKS = [
   { id: 'github', title: 'GitHub', url: 'https://github.com/' },
@@ -717,8 +717,8 @@ function initOverviewGrid() {
     column: 12,
     cellHeight: 82,
     margin: 16,
-    float: false,
-    resizable: { handles: 'n, ne, nw, e, w' },
+    float: true,
+    resizable: { handles: 's, se, sw, e, w' },
     draggable: { handle: '.widget-drag-handle' },
   }, gridEl);
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
@@ -761,7 +761,8 @@ function persistOverviewGrid() {
 
 function safeUrl(value, fallback = WIDGET_URLS.webview) {
   const trimmed = String(value || '').trim();
-  if (!trimmed) return fallback;
+  if (!trimmed) return fallback || '';
+  if (/^about:blank$/i.test(trimmed)) return 'about:blank';
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
@@ -780,7 +781,7 @@ function writeWebviewUrl(id, url) {
 
 function webviewUrlFor(widget = {}) {
   const urls = readWebviewUrls();
-  return urls[widget.id] || widget.url || WIDGET_URLS[widget.type] || WIDGET_URLS.webview;
+  return urls[widget.id] || widget.url || WIDGET_URLS[widget.type] || WIDGET_URLS.webview || '';
 }
 
 function bookmarkInitial(title = '') {
@@ -885,6 +886,7 @@ function widgetBodyHtml(type, widget = {}) {
   if (type === 'bookmarks') return bookmarksHtml();
   if (type === 'memo') return memoHtml(widget);
   const url = webviewUrlFor({ ...widget, type });
+  const frameUrl = url || 'about:blank';
   return `<div class="webview-widget" data-webview-widget="true">
     <form class="webview-toolbar">
       <button class="button secondary" type="button" data-webview-action="back">←</button>
@@ -893,7 +895,7 @@ function widgetBodyHtml(type, widget = {}) {
       <input name="url" value="${escapeHtml(url)}" placeholder="https://example.com" />
       <button class="button primary" type="submit">Go</button>
     </form>
-    <iframe src="${escapeHtml(url)}" title="${escapeHtml(type)}" loading="lazy"></iframe>
+    <iframe src="${escapeHtml(frameUrl)}" title="${escapeHtml(type)}" loading="lazy"></iframe>
   </div>`;
 }
 
@@ -2442,7 +2444,7 @@ contentEl.addEventListener('submit', (event) => {
     const frame = event.target.closest('[data-webview-widget]')?.querySelector('iframe');
     const url = safeUrl(new FormData(event.target).get('url'));
     if (widget) writeWebviewUrl(widget.dataset.widgetId, url);
-    if (frame) frame.src = url;
+    if (frame) frame.src = url || 'about:blank';
     return;
   }
   if (event.target.classList.contains('bookmark-form')) {

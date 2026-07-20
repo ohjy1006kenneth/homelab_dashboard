@@ -27,7 +27,7 @@ DEFAULT_WIDGETS = [
     {"id": "clock", "type": "clock", "x": 9, "y": 0, "w": 3, "h": 2},
     {"id": "search", "type": "web-search", "x": 0, "y": 2, "w": 6, "h": 2},
     {"id": "apps", "type": "app-launcher", "x": 0, "y": 4, "w": 8, "h": 4},
-    {"id": "webview", "type": "webview", "x": 8, "y": 2, "w": 4, "h": 5, "url": "https://chatgpt.com/"},
+    {"id": "webview", "type": "webview", "x": 8, "y": 2, "w": 4, "h": 5},
     {"id": "bookmarks", "type": "bookmarks", "x": 0, "y": 8, "w": 5, "h": 4},
     {"id": "weather", "type": "weather", "x": 5, "y": 8, "w": 3, "h": 3},
     {"id": "calendar", "type": "calendar", "x": 8, "y": 7, "w": 4, "h": 4},
