@@ -62,9 +62,10 @@ const DEFAULT_BOOKMARKS = [
 ];
 let overviewGrid = null;
 let overviewWidgetTimers = [];
+let overviewWeatherObservers = [];
 let overviewLayoutMode = 'desktop';
 let overviewResponsiveRenderTimer = 0;
-let overviewDockSpacingFrame = 0;
+let overviewBottomClearanceFrame = 0;
 
 function overviewIsCompactViewport() {
   return window.matchMedia('(max-width: 820px)').matches;
@@ -110,22 +111,30 @@ function overviewWidgetsForViewport(widgets = []) {
   return overviewIsCompactViewport() ? compactOverviewWidgets(widgets) : widgets;
 }
 
-function updateOverviewDockSpacing() {
-  const dock = document.querySelector('.overview-floating-nav');
-  if (!dock) {
-    document.documentElement.style.removeProperty('--overview-dock-space');
+function updateOverviewBottomClearance() {
+  overviewBottomClearanceFrame = 0;
+  const measureTop = (el) => {
+    if (!el) return null;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number.parseFloat(style.opacity || '1') === 0) return null;
+    const rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return rect.top;
+  };
+  const dockTop = measureTop(document.querySelector('.overview-floating-nav'));
+  const managerTop = measureTop(document.querySelector('#widget-manager'));
+  const tops = [dockTop, managerTop].filter((top) => Number.isFinite(top));
+  if (!tops.length) {
+    document.documentElement.style.removeProperty('--overview-bottom-clearance');
     return;
   }
-  const manager = document.querySelector('#widget-manager');
-  const dockHeight = Math.ceil(dock.getBoundingClientRect().height || 0);
-  const managerSpace = manager && !manager.hidden ? Math.ceil(manager.getBoundingClientRect().height || 0) + 16 : 0;
-  const space = Math.max(160, dockHeight + managerSpace + 24);
-  document.documentElement.style.setProperty('--overview-dock-space', `${space}px`);
+  const clearance = Math.max(0, Math.ceil(window.innerHeight - Math.min(...tops) + 24));
+  document.documentElement.style.setProperty('--overview-bottom-clearance', `${clearance}px`);
 }
 
-function scheduleOverviewDockSpacingUpdate() {
-  if (overviewDockSpacingFrame) cancelAnimationFrame(overviewDockSpacingFrame);
-  overviewDockSpacingFrame = requestAnimationFrame(updateOverviewDockSpacing);
+function scheduleOverviewBottomClearanceUpdate() {
+  if (overviewBottomClearanceFrame) cancelAnimationFrame(overviewBottomClearanceFrame);
+  overviewBottomClearanceFrame = requestAnimationFrame(updateOverviewBottomClearance);
 }
 
 function scheduleOverviewResponsiveRender() {
@@ -137,7 +146,7 @@ function scheduleOverviewResponsiveRender() {
       renderOverview();
       return;
     }
-    scheduleOverviewDockSpacingUpdate();
+    scheduleOverviewBottomClearanceUpdate();
   }, 120);
 }
 
@@ -740,12 +749,16 @@ function setOverviewWidgetsPinned(pinned) {
     overviewGrid.movable(interactive);
     overviewGrid.resizable(interactive);
   }
-  scheduleOverviewDockSpacingUpdate();
+  scheduleOverviewBottomClearanceUpdate();
 }
 
 function cleanupOverviewWidgets() {
   overviewWidgetTimers.forEach((timer) => clearInterval(timer));
   overviewWidgetTimers = [];
+  overviewWeatherObservers.forEach((observer) => observer.disconnect());
+  overviewWeatherObservers = [];
+  document.body.classList.remove('overview-mobile-reflow', 'overview-widgets-pinned');
+  document.documentElement.style.removeProperty('--overview-bottom-clearance');
   if (overviewGrid) {
     overviewGrid.destroy(false);
     overviewGrid = null;
@@ -798,7 +811,7 @@ function renderOverview() {
     </nav>`;
   initOverviewGrid(overviewWidgetsForViewport(readOverviewWidgets()));
   setOverviewWidgetsPinned(overviewWidgetsPinned());
-  scheduleOverviewDockSpacingUpdate();
+  scheduleOverviewBottomClearanceUpdate();
 }
 
 function initOverviewGrid(widgets = readOverviewWidgets()) {
@@ -819,7 +832,7 @@ function initOverviewGrid(widgets = readOverviewWidgets()) {
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
   if (!compact) overviewGrid.on('change', () => persistOverviewGrid());
   setOverviewWidgetsPinned(overviewWidgetsPinned());
-  scheduleOverviewDockSpacingUpdate();
+  scheduleOverviewBottomClearanceUpdate();
 }
 
 function widgetCatalogHtml() {
@@ -1205,8 +1218,29 @@ function hourlyWeatherItems(hourly = [], limit = 8) {
     .slice(0, limit);
 }
 
+function syncWeatherHourlyLayout(el) {
+  if (!el) return;
+  const container = el.closest('.overview-widget[data-widget-type="weather"]') || el;
+  const rect = container.getBoundingClientRect();
+  const expanded = rect.width >= 620 && rect.height >= 200;
+  el.dataset.weatherExpanded = expanded ? 'true' : 'false';
+}
+
+function observeWeatherHourlyLayout(el) {
+  if (!el) return;
+  syncWeatherHourlyLayout(el);
+  if (el.__overviewWeatherResizeObserver) return;
+  if (typeof ResizeObserver !== 'function') return;
+  const container = el.closest('.overview-widget[data-widget-type="weather"]') || el;
+  const observer = new ResizeObserver(() => syncWeatherHourlyLayout(el));
+  observer.observe(container);
+  el.__overviewWeatherResizeObserver = observer;
+  overviewWeatherObservers.push(observer);
+}
+
 async function renderWeather(el, { refreshLocation = false } = {}) {
   if (!el) return;
+  el.dataset.weatherExpanded = 'false';
   el.innerHTML = '<strong>Weather</strong><small>Detecting this device…</small>';
   try {
     const location = await fetchClientWeatherLocation({ refresh: refreshLocation });
@@ -1229,18 +1263,20 @@ async function renderWeather(el, { refreshLocation = false } = {}) {
     const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
     const label = weatherLabel(location);
     const hourly = hourlyWeatherItems(data.hourly, 6);
-    const hourlyHtml = hourly.length ? `<div class="weather-hourly" aria-label="Hourly forecast">${hourly.map((item) => {
+    const hourlyHtml = hourly.length ? `<div class="weather-hourly" aria-label="Hourly forecast" style="grid-template-columns: repeat(${hourly.length}, minmax(0, 1fr));">${hourly.map((item) => {
       const hour = item.date.toLocaleTimeString([], { hour: 'numeric' });
       const itemTempValue = item.temperature ?? item.temperature_2m;
       const itemTemp = Number.isFinite(Number(itemTempValue)) ? `${Math.round(Number(itemTempValue))}°` : '—';
       const popValue = item.precipitation_probability;
       const pop = Number.isFinite(Number(popValue)) ? `${Math.round(Number(popValue))}%` : '—';
       const windHourValue = item.wind_speed ?? item.wind_speed_10m;
-      const detail = [item.condition || weatherConditionLabel(item.weather_code), pop, Number.isFinite(Number(windHourValue)) ? `${Math.round(Number(windHourValue))} km/h` : null].filter(Boolean).join(' · ');
-      return `<article><span>${escapeHtml(hour)}</span><strong>${escapeHtml(itemTemp)}</strong><small>${escapeHtml(detail)}</small></article>`;
+      const windHour = Number.isFinite(Number(windHourValue)) ? `${Math.round(Number(windHourValue))} km/h` : '—';
+      const conditionText = item.condition || weatherConditionLabel(item.weather_code);
+      return `<article class="weather-hour-card" data-weather-hour-card><span class="weather-hour-time" data-weather-hour-time>${escapeHtml(hour)}</span><strong class="weather-hour-temp" data-weather-hour-temp>${escapeHtml(itemTemp)}</strong><span class="weather-hour-condition" data-weather-hour-condition>${escapeHtml(conditionText)}</span><span class="weather-hour-meta weather-hour-precip" data-weather-hour-precip>Precip ${escapeHtml(pop)}</span><span class="weather-hour-meta weather-hour-wind" data-weather-hour-wind>Wind ${escapeHtml(windHour)}</span></article>`;
     }).join('')}</div>` : '';
     const note = data.stale ? '<small class="weather-note">Showing cached weather because refresh failed.</small>' : (data.error ? `<small class="weather-note">${escapeHtml(data.error)}</small>` : '');
     el.innerHTML = `<div class="weather-current"><strong>${temp}</strong><small>${escapeHtml(condition)} · ${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small></div>${note}${hourlyHtml}`;
+    observeWeatherHourlyLayout(el);
   } catch (error) {
     el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Client weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
   }
@@ -2469,7 +2505,7 @@ contentEl.addEventListener('click', async (event) => {
   const manager = document.querySelector('#widget-manager');
   if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) {
     manager.hidden = true;
-    scheduleOverviewDockSpacingUpdate();
+    scheduleOverviewBottomClearanceUpdate();
   }
   if (!event.target.closest('.bookmark-widget')) document.querySelectorAll('.bookmark-form:not([hidden])').forEach((form) => { form.hidden = true; });
   if (!event.target.closest('#overview-search-form')) document.querySelector('#overview-search-results')?.setAttribute('hidden', '');
@@ -2533,7 +2569,7 @@ contentEl.addEventListener('click', async (event) => {
     const manager = document.querySelector('#widget-manager');
     if (manager) {
       manager.hidden = !manager.hidden;
-      scheduleOverviewDockSpacingUpdate();
+      scheduleOverviewBottomClearanceUpdate();
     }
     return;
   }
