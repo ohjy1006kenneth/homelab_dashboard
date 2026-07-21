@@ -78,6 +78,7 @@ const NEWS_MAX_VISIBLE = 60;
 let settings = null;
 let overviewConfig = null;
 let overviewConfigSaveTimer = null;
+let overviewStatus = null;
 let ops = null;
 let stockAudit = null;
 let stockReviewOptions = null;
@@ -670,17 +671,61 @@ function cleanupOverviewWidgets() {
   }
 }
 
+
+function overviewHealthStripHtml() {
+  const summary = overviewStatus?.apps_summary || {};
+  const generated = overviewStatus?.generated_at ? new Date(overviewStatus.generated_at) : null;
+  const updated = generated && !Number.isNaN(generated.getTime()) ? generated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
+  const widgetCount = readOverviewWidgets().length;
+  const webDown = Number(summary.web_down || 0);
+  const down = Number(summary.down || 0);
+  const statusLabel = overviewStatus?.ok === false ? 'Degraded' : webDown || down ? 'Needs attention' : 'Live';
+  return `<section class="overview-health-strip" aria-label="Overview status">
+    <article><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></article>
+    <article><span>Apps up</span><strong>${escapeHtml(summary.up ?? '—')}/${escapeHtml(summary.total ?? '—')}</strong></article>
+    <article><span>Web issues</span><strong>${escapeHtml(webDown)}</strong></article>
+    <article><span>Widgets</span><strong>${escapeHtml(widgetCount)}</strong></article>
+    <article><span>Updated</span><strong>${escapeHtml(updated)}</strong></article>
+  </section>`;
+}
+
+function overviewSearchItems(query = '') {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const appItems = apps.map((app) => ({ type: 'App', title: app.name, detail: app.description || app.id, url: openHref(app), icon: appIconHtml(app) }));
+  const bookmarkItems = readBookmarks().map((item) => ({ type: 'Bookmark', title: item.title, detail: item.url, url: safeUrl(item.url), icon: `<div class="app-fallback">${bookmarkInitial(item.title).slice(0, 1)}</div>` }));
+  return [...appItems, ...bookmarkItems]
+    .filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(q))
+    .slice(0, 7);
+}
+
+function renderOverviewSearchResults(query = '') {
+  const box = document.querySelector('#overview-search-results');
+  if (!box) return;
+  const items = overviewSearchItems(query);
+  if (!items.length) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = items.map((item) => `<a class="overview-search-result" href="${escapeHtml(item.url || '#')}" target="_blank" rel="noreferrer">
+    <span class="app-icon small-icon">${item.icon}</span><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.type)} · ${escapeHtml(item.detail || '')}</small></span>
+  </a>`).join('');
+}
+
 function renderOverview() {
   cleanupOverviewWidgets();
-  contentEl.innerHTML = `<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
+  contentEl.innerHTML = `${overviewHealthStripHtml()}<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
     <section class="widget-manager panel" id="widget-manager" hidden>
       <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add widgets</h2></div></div>
       <div class="widget-catalog">${widgetCatalogHtml()}</div>
     </section>
     <nav class="overview-floating-nav" aria-label="Overview controls">
       <form class="overview-web-search" id="overview-search-form">
-        <input id="overview-search" type="search" placeholder="Search the web…" autocomplete="off" />
+        <input id="overview-search" type="search" placeholder="Search apps, bookmarks, or web…" autocomplete="off" />
         <button class="button primary nav-icon-button" type="submit" aria-label="Search"><span class="nav-glyph nav-glyph-search" aria-hidden="true"></span></button>
+        <div class="overview-search-results" id="overview-search-results" hidden></div>
       </form>
       <button class="button secondary nav-icon-button" data-add-widget="true" aria-label="Add widget"><span class="nav-glyph nav-glyph-plus" aria-hidden="true"></span></button>
       <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false"><span class="nav-glyph nav-glyph-pin" aria-hidden="true"></span></button>
@@ -2211,7 +2256,12 @@ function configureRefreshIntervals() {
   setManagedInterval('apps', async () => {
     try {
       apps = await api('/api/apps?health=true');
-      if (currentRoute === 'overview') drawOverviewApps();
+      if (currentRoute === 'overview') {
+        overviewStatus = await api('/api/overview/status').catch(() => overviewStatus);
+        const strip = document.querySelector('.overview-health-strip');
+        if (strip) strip.outerHTML = overviewHealthStripHtml();
+        drawOverviewApps();
+      }
       if (currentRoute === 'apps') renderAppsPage();
     } catch (_) {}
   }, preferenceNumber(refresh.apps_seconds, 30, 15, 60));
@@ -2223,14 +2273,14 @@ function configureRefreshIntervals() {
 async function load() {
   setStatus('Loading…');
   try {
-    const [nextMetrics, appRows, settingRows, overviewRows] = await Promise.all([
-      api('/api/metrics'),
-      api('/api/apps?health=true').catch(() => []),
+    const [bootstrapRows, settingRows] = await Promise.all([
+      api('/api/overview/bootstrap').catch(async () => ({ overview: await api('/api/overview').catch(() => defaultOverviewConfig()), metrics: await api('/api/metrics'), apps: await api('/api/apps?health=true').catch(() => []), apps_summary: {}, ok: false })),
       api('/api/settings').catch(() => ({ stocks: [], pinned_app_ids: [] })),
-      api('/api/overview').catch(() => defaultOverviewConfig()),
     ]);
-    metrics = nextMetrics;
-    apps = appRows;
+    overviewStatus = bootstrapRows;
+    metrics = bootstrapRows.metrics;
+    apps = bootstrapRows.apps || [];
+    const overviewRows = bootstrapRows.overview || defaultOverviewConfig();
     agents = [];
     missionControl = null;
     newsletterSources = [];
@@ -2326,7 +2376,7 @@ contentEl.addEventListener('drop', async (event) => {
 });
 
 contentEl.addEventListener('input', (event) => {
-  if (event.target.closest('#overview-search')) drawOverviewApps();
+  if (event.target.closest('#overview-search')) { drawOverviewApps(); renderOverviewSearchResults(event.target.value); }
   const calc = event.target.closest('.calculator-widget');
   if (calc) {
     const expression = calc.querySelector('[name="expression"]')?.value || '';
@@ -2343,6 +2393,7 @@ contentEl.addEventListener('click', async (event) => {
   const manager = document.querySelector('#widget-manager');
   if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) manager.hidden = true;
   if (!event.target.closest('.bookmark-widget')) document.querySelectorAll('.bookmark-form:not([hidden])').forEach((form) => { form.hidden = true; });
+  if (!event.target.closest('#overview-search-form')) document.querySelector('#overview-search-results')?.setAttribute('hidden', '');
   const deleteButton = event.target.closest('[data-delete-widget]');
   if (deleteButton && overviewGrid) {
     const widget = deleteButton.closest('.grid-stack-item');
@@ -2547,6 +2598,14 @@ contentEl.addEventListener('submit', (event) => {
   if (event.target.id === 'overview-search-form' || event.target.classList.contains('widget-search-form')) {
     event.preventDefault();
     const query = event.target.querySelector('input[type="search"]')?.value?.trim();
+    if (event.target.id === 'overview-search-form') {
+      const firstLocal = overviewSearchItems(query)[0];
+      if (firstLocal?.url) {
+        window.open(firstLocal.url, '_blank', 'noopener,noreferrer');
+        document.querySelector('#overview-search-results')?.setAttribute('hidden', '');
+        return;
+      }
+    }
     if (query) window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank', 'noopener,noreferrer');
     return;
   }

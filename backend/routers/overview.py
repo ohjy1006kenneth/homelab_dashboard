@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -14,10 +15,13 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from backend.database import PROJECT_DIR
+from backend.routers import apps as apps_router
+from backend.routers.metrics import current_metrics
 
 router = APIRouter(prefix="/api/overview", tags=["overview"])
 CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
 GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+OVERVIEW_CACHE: dict[str, dict[str, Any]] = {}
 
 DEFAULT_BOOKMARKS = [
     {"id": "github", "title": "GitHub", "url": "https://github.com/"},
@@ -86,6 +90,35 @@ def _read_config() -> dict[str, Any]:
 
 def _write_config(cfg: dict[str, Any]) -> None:
     CONFIG_PATH.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+
+
+
+
+def _cache_get(key: str, ttl_seconds: int) -> dict[str, Any] | None:
+    row = OVERVIEW_CACHE.get(key)
+    if not row:
+        return None
+    if time.time() - float(row.get("at", 0)) > ttl_seconds:
+        return None
+    value = _deepcopy(row.get("value"))
+    if isinstance(value, dict):
+        value["cache"] = {"hit": True, "age_seconds": round(time.time() - float(row.get("at", 0)), 1), "ttl_seconds": ttl_seconds}
+    return value
+
+
+def _cache_set(key: str, value: dict[str, Any]) -> dict[str, Any]:
+    stored = _deepcopy(value)
+    OVERVIEW_CACHE[key] = {"at": time.time(), "value": stored}
+    value = _deepcopy(value)
+    value["cache"] = {"hit": False, "age_seconds": 0, "ttl_seconds": None}
+    return value
+
+
+def _safe_call(name: str, fn, fallback: Any) -> dict[str, Any]:
+    try:
+        return {"ok": True, "data": fn(), "error": None}
+    except Exception as exc:  # noqa: BLE001 - overview bootstrap should degrade widget-by-widget
+        return {"ok": False, "data": fallback, "error": f"{name}: {str(exc)[:180]}"}
 
 
 def _overview(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -222,6 +255,42 @@ def _calendar_events(start: datetime, end: datetime) -> list[dict[str, Any]]:
     return events
 
 
+
+
+def _overview_status_payload(request: Request | None = None) -> dict[str, Any]:
+    app_result = _safe_call("apps", lambda: apps_router.list_apps(request, health=True), [])
+    app_rows = app_result["data"] or []
+    app_summary = {
+        "total": len(app_rows),
+        "up": sum(1 for app in app_rows if app.get("status") == "running" and (app.get("health") or {}).get("ok") is not False),
+        "web_down": sum(1 for app in app_rows if app.get("status") == "running" and (app.get("health") or {}).get("ok") is False),
+        "down": sum(1 for app in app_rows if app.get("status") in {"stopped", "missing"}),
+        "unknown": sum(1 for app in app_rows if app.get("status") not in {"running", "stopped", "missing"}),
+    }
+    metric_result = _safe_call("metrics", current_metrics, {})
+    errors = [row["error"] for row in (app_result, metric_result) if row.get("error")]
+    return {
+        "ok": not errors,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "apps_summary": app_summary,
+        "apps": app_rows,
+        "metrics": metric_result["data"],
+        "google_calendar": _google_auth_state(),
+        "errors": errors,
+    }
+
+
+@router.get("/status")
+def overview_status(request: Request) -> dict[str, Any]:
+    return _overview_status_payload(request)
+
+
+@router.get("/bootstrap")
+def overview_bootstrap(request: Request) -> dict[str, Any]:
+    overview = get_overview()
+    status = _overview_status_payload(request)
+    return {"ok": True, "overview": overview, **status}
+
 @router.get("")
 def get_overview() -> dict[str, Any]:
     overview = _overview()
@@ -262,36 +331,53 @@ def save_weather_location(payload: WeatherLocation) -> dict[str, Any]:
 
 
 @router.get("/weather")
-def weather(latitude: float | None = Query(default=None, ge=-90, le=90), longitude: float | None = Query(default=None, ge=-180, le=180)) -> dict[str, Any]:
+def weather(latitude: float | None = Query(default=None, ge=-90, le=90), longitude: float | None = Query(default=None, ge=-180, le=180), refresh: bool = False) -> dict[str, Any]:
     overview = _overview()
     saved = overview.get("weather", {})
     lat = latitude if latitude is not None else saved.get("latitude")
     lon = longitude if longitude is not None else saved.get("longitude")
     if lat is None or lon is None:
-        return {"ok": False, "needs_location": True, "message": "Set or allow a location to show weather."}
-    response = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={
-            "latitude": lat,
-            "longitude": lon,
-            "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
-            "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
-            "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
-            "timezone": "auto",
-            "forecast_days": 3,
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return {
-        "ok": True,
-        "location": {"latitude": lat, "longitude": lon, "label": saved.get("label") or "Local weather"},
-        "current": data.get("current", {}),
-        "hourly": data.get("hourly", {}),
-        "daily": data.get("daily", {}),
-        "timezone": data.get("timezone"),
-    }
+        return {"ok": False, "needs_location": True, "message": "Set or allow a location to show weather.", "fetched_at": datetime.now(timezone.utc).isoformat()}
+    cache_key = f"weather:{round(float(lat), 3)}:{round(float(lon), 3)}"
+    if not refresh:
+        cached = _cache_get(cache_key, 10 * 60)
+        if cached:
+            return cached
+    try:
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
+                "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
+                "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+                "timezone": "auto",
+                "forecast_days": 3,
+            },
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        result = {
+            "ok": True,
+            "location": {"latitude": lat, "longitude": lon, "label": saved.get("label") or "Local weather"},
+            "current": data.get("current", {}),
+            "hourly": data.get("hourly", {}),
+            "daily": data.get("daily", {}),
+            "timezone": data.get("timezone"),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "provider": "open-meteo",
+        }
+        return _cache_set(cache_key, result)
+    except Exception as exc:  # noqa: BLE001
+        cached = _cache_get(cache_key, 24 * 60 * 60)
+        if cached:
+            cached["ok"] = True
+            cached["stale"] = True
+            cached["message"] = f"Showing cached weather because refresh failed: {str(exc)[:120]}"
+            return cached
+        return {"ok": False, "message": f"Weather provider unavailable: {str(exc)[:160]}", "fetched_at": datetime.now(timezone.utc).isoformat(), "provider": "open-meteo"}
 
 
 @router.post("/google-calendar/client-secret")
@@ -392,13 +478,32 @@ def disconnect_google_calendar() -> dict[str, Any]:
 
 
 @router.get("/calendar")
-def calendar(days: int = Query(default=31, ge=1, le=90)) -> dict[str, Any]:
+def calendar(days: int = Query(default=31, ge=1, le=90), refresh: bool = False) -> dict[str, Any]:
+    google = _google_auth_state()
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=1)
     end = now + timedelta(days=days)
-    google = _google_auth_state()
-    events = _calendar_events(start, end) if google["connected"] else []
-    return {"ok": True, "google_calendar": google, "events": events, "range": {"start": start.isoformat(), "end": end.isoformat()}}
+    cache_key = f"calendar:{days}:{google.get('connected')}"
+    if google["connected"] and not refresh:
+        cached = _cache_get(cache_key, 5 * 60)
+        if cached:
+            return cached
+    events: list[dict[str, Any]] = []
+    error = None
+    if google["connected"]:
+        try:
+            events = _calendar_events(start, end)
+        except Exception as exc:  # noqa: BLE001
+            error = str(exc)[:180]
+    result = {
+        "ok": error is None,
+        "google_calendar": google,
+        "events": events,
+        "error": error,
+        "fetched_at": now.isoformat(),
+        "range": {"start": start.isoformat(), "end": end.isoformat()},
+    }
+    return _cache_set(cache_key, result) if google["connected"] and error is None else result
 
 
 @router.get("/google-calendar/status")
