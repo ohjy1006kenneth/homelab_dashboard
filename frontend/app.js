@@ -735,12 +735,14 @@ function overviewWidgetsPinned() {
   return overviewConfig?.widgets_pinned === true;
 }
 
-function setOverviewWidgetsPinned(pinned) {
+function setOverviewWidgetsPinned(pinned, { persist = true } = {}) {
   if (!overviewConfig) overviewConfig = defaultOverviewConfig();
   const changed = overviewConfig.widgets_pinned !== pinned;
   overviewConfig.widgets_pinned = pinned;
-  localStorage.setItem('overviewWidgetsPinned', pinned ? 'true' : 'false');
-  if (changed) scheduleOverviewSync();
+  if (persist) {
+    localStorage.setItem('overviewWidgetsPinned', pinned ? 'true' : 'false');
+    if (changed) scheduleOverviewSync();
+  }
   document.body.classList.toggle('overview-widgets-pinned', pinned);
   document.querySelector('[data-pin-widgets]')?.classList.toggle('active', pinned);
   document.querySelector('[data-pin-widgets]')?.setAttribute('aria-pressed', String(pinned));
@@ -749,7 +751,6 @@ function setOverviewWidgetsPinned(pinned) {
     overviewGrid.movable(interactive);
     overviewGrid.resizable(interactive);
   }
-  scheduleOverviewBottomClearanceUpdate();
 }
 
 function cleanupOverviewWidgets() {
@@ -810,7 +811,7 @@ function renderOverview() {
       <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false"><span class="nav-glyph nav-glyph-pin" aria-hidden="true"></span></button>
     </nav>`;
   initOverviewGrid(overviewWidgetsForViewport(readOverviewWidgets()));
-  setOverviewWidgetsPinned(overviewWidgetsPinned());
+  setOverviewWidgetsPinned(overviewLayoutMode === 'compact' ? false : overviewWidgetsPinned(), { persist: overviewLayoutMode !== 'compact' });
   scheduleOverviewBottomClearanceUpdate();
 }
 
@@ -831,7 +832,7 @@ function initOverviewGrid(widgets = readOverviewWidgets()) {
   }, gridEl);
   widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
   if (!compact) overviewGrid.on('change', () => persistOverviewGrid());
-  setOverviewWidgetsPinned(overviewWidgetsPinned());
+  setOverviewWidgetsPinned(overviewLayoutMode === 'compact' ? false : overviewWidgetsPinned(), { persist: overviewLayoutMode !== 'compact' });
   scheduleOverviewBottomClearanceUpdate();
 }
 

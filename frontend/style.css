@@ -583,7 +583,7 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .bookmark-form input { min-width: 0; background: #050505; color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; outline: none; }
 .bookmark-form input:focus { border-color: #444; }
 .clock-widget { height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
-.clock-widget strong { font: 500 clamp(28px, 4.6vw, 52px) var(--font-mono); letter-spacing: -.06em; white-space: nowrap; }
+.clock-widget strong { font: 500 clamp(28px, 4.6vw, 42px) var(--font-mono); letter-spacing: -.06em; line-height: 1; max-width: 100%; white-space: nowrap; }
 .clock-widget small { color: var(--text-secondary); }
 .system-monitor-widget { height: 100%; display: grid; align-items: stretch; }
 .system-monitor-widget .metrics-grid { height: 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
