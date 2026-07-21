@@ -988,6 +988,7 @@ Rules:
 > "Build stock-chart and stock-overview widgets (TradingView iframes)."
 
 > "Build the Widget Catalog drawer and edit mode chrome (drag handle, remove button, settings button) per SPEC.md §12."
+> "Overview maturity correction: Calendar OAuth remains server-side (no credential paste or client-secret API), Weather exposes normalized hourly data and expands to a scrollable hourly row at practical widget sizes, and the old global Overview summary strip is removed."
 
 **Phase 5 — Apps page + Compose editor**
 > "Build docker-stats widget. Build the Apps page default layout with search/filter. Then build the compose editor per SPEC.md §13 — backend compose_parser.py first, round-trip test it, then the tabbed frontend UI, then the diff modal and apply flow."

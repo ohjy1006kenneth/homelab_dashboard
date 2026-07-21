@@ -62,6 +62,84 @@ const DEFAULT_BOOKMARKS = [
 ];
 let overviewGrid = null;
 let overviewWidgetTimers = [];
+let overviewLayoutMode = 'desktop';
+let overviewResponsiveRenderTimer = 0;
+let overviewDockSpacingFrame = 0;
+
+function overviewIsCompactViewport() {
+  return window.matchMedia('(max-width: 820px)').matches;
+}
+
+function compactOverviewWidgets(widgets = []) {
+  const ordered = widgets
+    .map((widget, index) => ({ ...widget, __order: index }))
+    .sort((left, right) => {
+      const leftY = Number.isFinite(Number(left.y)) ? Number(left.y) : 0;
+      const rightY = Number.isFinite(Number(right.y)) ? Number(right.y) : 0;
+      const leftX = Number.isFinite(Number(left.x)) ? Number(left.x) : 0;
+      const rightX = Number.isFinite(Number(right.x)) ? Number(right.x) : 0;
+      return (leftY - rightY) || (leftX - rightX) || (left.__order - right.__order);
+    });
+  let cursorY = 0;
+  return ordered.map((widget) => {
+    const baseHeight = Number(widget.h) || 2;
+    const heightByType = {
+      'app-launcher': Math.max(baseHeight, 5),
+      calendar: Math.max(baseHeight, 5),
+      webview: Math.max(baseHeight, 5),
+      bookmarks: Math.max(baseHeight, 4),
+      weather: Math.max(baseHeight, 3),
+      calculator: Math.max(baseHeight, 4),
+      memo: Math.max(baseHeight, 4),
+    };
+    const h = heightByType[widget.type] || baseHeight;
+    const compactWidget = {
+      ...widget,
+      x: 0,
+      y: cursorY,
+      w: 1,
+      h,
+    };
+    cursorY += h;
+    delete compactWidget.__order;
+    return compactWidget;
+  });
+}
+
+function overviewWidgetsForViewport(widgets = []) {
+  return overviewIsCompactViewport() ? compactOverviewWidgets(widgets) : widgets;
+}
+
+function updateOverviewDockSpacing() {
+  const dock = document.querySelector('.overview-floating-nav');
+  if (!dock) {
+    document.documentElement.style.removeProperty('--overview-dock-space');
+    return;
+  }
+  const manager = document.querySelector('#widget-manager');
+  const dockHeight = Math.ceil(dock.getBoundingClientRect().height || 0);
+  const managerSpace = manager && !manager.hidden ? Math.ceil(manager.getBoundingClientRect().height || 0) + 16 : 0;
+  const space = Math.max(160, dockHeight + managerSpace + 24);
+  document.documentElement.style.setProperty('--overview-dock-space', `${space}px`);
+}
+
+function scheduleOverviewDockSpacingUpdate() {
+  if (overviewDockSpacingFrame) cancelAnimationFrame(overviewDockSpacingFrame);
+  overviewDockSpacingFrame = requestAnimationFrame(updateOverviewDockSpacing);
+}
+
+function scheduleOverviewResponsiveRender() {
+  if (currentRoute !== 'overview') return;
+  if (overviewResponsiveRenderTimer) clearTimeout(overviewResponsiveRenderTimer);
+  overviewResponsiveRenderTimer = setTimeout(() => {
+    const nextMode = overviewIsCompactViewport() ? 'compact' : 'desktop';
+    if (nextMode !== overviewLayoutMode) {
+      renderOverview();
+      return;
+    }
+    scheduleOverviewDockSpacingUpdate();
+  }, 120);
+}
 
 let apps = [];
 let metrics = null;
@@ -650,16 +728,19 @@ function overviewWidgetsPinned() {
 
 function setOverviewWidgetsPinned(pinned) {
   if (!overviewConfig) overviewConfig = defaultOverviewConfig();
+  const changed = overviewConfig.widgets_pinned !== pinned;
   overviewConfig.widgets_pinned = pinned;
   localStorage.setItem('overviewWidgetsPinned', pinned ? 'true' : 'false');
-  scheduleOverviewSync();
+  if (changed) scheduleOverviewSync();
   document.body.classList.toggle('overview-widgets-pinned', pinned);
   document.querySelector('[data-pin-widgets]')?.classList.toggle('active', pinned);
   document.querySelector('[data-pin-widgets]')?.setAttribute('aria-pressed', String(pinned));
   if (overviewGrid) {
-    overviewGrid.movable(!pinned);
-    overviewGrid.resizable(!pinned);
+    const interactive = !pinned && overviewLayoutMode !== 'compact';
+    overviewGrid.movable(interactive);
+    overviewGrid.resizable(interactive);
   }
+  scheduleOverviewDockSpacingUpdate();
 }
 
 function cleanupOverviewWidgets() {
@@ -671,23 +752,6 @@ function cleanupOverviewWidgets() {
   }
 }
 
-
-function overviewHealthStripHtml() {
-  const summary = overviewStatus?.apps_summary || {};
-  const generated = overviewStatus?.generated_at ? new Date(overviewStatus.generated_at) : null;
-  const updated = generated && !Number.isNaN(generated.getTime()) ? generated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
-  const widgetCount = readOverviewWidgets().length;
-  const webDown = Number(summary.web_down || 0);
-  const down = Number(summary.down || 0);
-  const statusLabel = overviewStatus?.ok === false ? 'Degraded' : webDown || down ? 'Needs attention' : 'Live';
-  return `<section class="overview-health-strip" aria-label="Overview status">
-    <article><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></article>
-    <article><span>Apps up</span><strong>${escapeHtml(summary.up ?? '—')}/${escapeHtml(summary.total ?? '—')}</strong></article>
-    <article><span>Web issues</span><strong>${escapeHtml(webDown)}</strong></article>
-    <article><span>Widgets</span><strong>${escapeHtml(widgetCount)}</strong></article>
-    <article><span>Updated</span><strong>${escapeHtml(updated)}</strong></article>
-  </section>`;
-}
 
 function overviewSearchItems(query = '') {
   const q = query.trim().toLowerCase();
@@ -716,7 +780,9 @@ function renderOverviewSearchResults(query = '') {
 
 function renderOverview() {
   cleanupOverviewWidgets();
-  contentEl.innerHTML = `${overviewHealthStripHtml()}<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
+  overviewLayoutMode = overviewIsCompactViewport() ? 'compact' : 'desktop';
+  document.body.classList.toggle('overview-mobile-reflow', overviewLayoutMode === 'compact');
+  contentEl.innerHTML = `<section class="grid-stack overview-widget-grid" id="overview-widget-grid"></section>
     <section class="widget-manager panel" id="widget-manager" hidden>
       <div class="panel-head compact-head"><div><p class="eyebrow">Widgets</p><h2>Add widgets</h2></div></div>
       <div class="widget-catalog">${widgetCatalogHtml()}</div>
@@ -730,8 +796,30 @@ function renderOverview() {
       <button class="button secondary nav-icon-button" data-add-widget="true" aria-label="Add widget"><span class="nav-glyph nav-glyph-plus" aria-hidden="true"></span></button>
       <button class="button secondary nav-icon-button" data-pin-widgets="true" aria-label="Pin widgets" aria-pressed="false"><span class="nav-glyph nav-glyph-pin" aria-hidden="true"></span></button>
     </nav>`;
-  initOverviewGrid();
+  initOverviewGrid(overviewWidgetsForViewport(readOverviewWidgets()));
   setOverviewWidgetsPinned(overviewWidgetsPinned());
+  scheduleOverviewDockSpacingUpdate();
+}
+
+function initOverviewGrid(widgets = readOverviewWidgets()) {
+  const gridEl = document.querySelector('#overview-widget-grid');
+  if (!gridEl || !window.GridStack) {
+    if (gridEl) gridEl.innerHTML = '<div class="empty">Widget grid library is loading. Refresh once if this stays visible.</div>';
+    return;
+  }
+  const compact = overviewLayoutMode === 'compact';
+  overviewGrid = GridStack.init({
+    column: compact ? 1 : 12,
+    cellHeight: compact ? 80 : 82,
+    margin: compact ? 12 : 16,
+    float: !compact,
+    resizable: { handles: 's,se,sw,e,w' },
+    draggable: { handle: '.widget-drag-handle' },
+  }, gridEl);
+  widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
+  if (!compact) overviewGrid.on('change', () => persistOverviewGrid());
+  setOverviewWidgetsPinned(overviewWidgetsPinned());
+  scheduleOverviewDockSpacingUpdate();
 }
 
 function widgetCatalogHtml() {
@@ -751,37 +839,18 @@ function widgetCatalogCard(item) {
   </button>`;
 }
 
-function initOverviewGrid() {
-  const gridEl = document.querySelector('#overview-widget-grid');
-  if (!gridEl || !window.GridStack) {
-    if (gridEl) gridEl.innerHTML = '<div class="empty">Widget grid library is loading. Refresh once if this stays visible.</div>';
-    return;
-  }
-  const widgets = readOverviewWidgets();
-  overviewGrid = GridStack.init({
-    column: 12,
-    cellHeight: 82,
-    margin: 16,
-    float: true,
-    resizable: { handles: 's,se,sw,e,w' },
-    draggable: { handle: '.widget-drag-handle' },
-  }, gridEl);
-  widgets.forEach((widget) => addOverviewWidget(widget, { save: false }));
-  overviewGrid.on('change', () => persistOverviewGrid());
-  setOverviewWidgetsPinned(overviewWidgetsPinned());
-}
-
 
 function addOverviewWidget(widget, { save = true } = {}) {
   const catalog = overviewWidgetCatalogItem(widget.type);
   const id = widget.id || `${widget.type}-${Date.now()}`;
+  const compact = overviewLayoutMode === 'compact';
   const node = {
     id,
     x: widget.x,
     y: widget.y,
     w: widget.w || catalog.w,
     h: widget.h || catalog.h,
-    minW: 2,
+    minW: compact ? 1 : 2,
     minH: 2,
     content: `<div class="overview-widget" data-widget-id="${escapeHtml(id)}" data-widget-type="${escapeHtml(widget.type)}">
       <header class="overview-widget-head"><button class="widget-drag-handle" title="Move widget">⠿</button><strong>${escapeHtml(widget.title || catalog.title)}</strong><button class="icon-button danger" data-delete-widget="${escapeHtml(id)}" title="Delete widget">×</button></header>
@@ -790,11 +859,11 @@ function addOverviewWidget(widget, { save = true } = {}) {
   };
   overviewGrid.addWidget(node);
   hydrateWidget(id, widget.type);
-  if (save) persistOverviewGrid();
+  if (save && !compact) persistOverviewGrid();
 }
 
 function persistOverviewGrid() {
-  if (!overviewGrid) return;
+  if (!overviewGrid || overviewLayoutMode === 'compact') return;
   const widgets = overviewGrid.engine.nodes.map((node) => {
     const el = node.el?.querySelector('[data-widget-type]');
     const type = el?.dataset.widgetType || 'web-search';
@@ -809,6 +878,15 @@ function safeUrl(value, fallback = WIDGET_URLS.webview) {
   if (!trimmed) return fallback || '';
   if (/^about:blank$/i.test(trimmed)) return 'about:blank';
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function isBlockedWebviewUrl(value) {
+  try {
+    const hostname = new URL(String(value || '')).hostname.toLowerCase();
+    return ['chatgpt.com', 'claude.ai', 'gemini.google.com'].some((host) => hostname === host || hostname.endsWith(`.${host}`));
+  } catch (_) {
+    return false;
+  }
 }
 
 function readWebviewUrls() {
@@ -931,8 +1009,9 @@ function widgetBodyHtml(type, widget = {}) {
   if (type === 'bookmarks') return bookmarksHtml();
   if (type === 'memo') return memoHtml(widget);
   const url = webviewUrlFor({ ...widget, type });
-  const frameUrl = url || 'about:blank';
-  return `<div class="webview-widget" data-webview-widget="true">
+  const blocked = isBlockedWebviewUrl(url);
+  const frameUrl = blocked ? 'about:blank' : (url || 'about:blank');
+  return `<div class="webview-widget" data-webview-widget="true" data-webview-blocked="${blocked ? 'true' : 'false'}">
     <form class="webview-toolbar">
       <button class="button secondary" type="button" data-webview-action="back">←</button>
       <button class="button secondary" type="button" data-webview-action="forward">→</button>
@@ -965,16 +1044,29 @@ function hydrateWidget(id, type) {
 }
 
 function calendarSetupHtml(state = {}) {
-  const hasClient = Boolean(state.client_secret_present);
-  return `<div class="calendar-auth" data-calendar-auth>
-    <small>${hasClient ? 'OAuth client saved. Connect your Google account.' : 'Paste your Google OAuth client JSON once, then connect your account.'}</small>
-    <textarea data-google-client-secret placeholder='Paste OAuth client JSON from Google Cloud Console'></textarea>
-    <div class="calendar-auth-actions">
-      <button class="button secondary" type="button" data-google-client-save>Save client</button>
-      <button class="button primary" type="button" data-google-calendar-connect ${hasClient ? '' : 'disabled'}>Connect Google</button>
-    </div>
-    <small data-google-calendar-status>${escapeHtml(state.message || 'Google Calendar is not connected.')}</small>
+  const status = state.status || (state.connected ? 'connected' : state.configured ? 'configured' : 'setup_required');
+  const message = state.message || (status === 'setup_required' ? 'Google Calendar server OAuth is not configured.' : 'Connect Google Calendar to show events.');
+  if (status === 'setup_required') {
+    return `<div class="calendar-auth calendar-state calendar-state-setup" data-calendar-auth>
+      <small>${escapeHtml(message)}</small>
+    </div>`;
+  }
+  return `<div class="calendar-auth calendar-state calendar-state-${escapeHtml(status)}" data-calendar-auth>
+    <small>${escapeHtml(message)}</small>
+    ${status === 'configured' ? '<button class="button primary" type="button" data-google-calendar-connect>Connect Google Calendar</button>' : ''}
   </div>`;
+}
+
+function calendarEventHtml(event) {
+  const startValue = event.start_at || event.start?.dateTime || event.start?.date || '';
+  const start = startValue ? new Date(startValue) : null;
+  const label = start && !Number.isNaN(start.getTime())
+    ? event.all_day || !event.start?.dateTime
+      ? start.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : 'Soon';
+  const detail = [event.location, event.all_day ? 'All day' : ''].filter(Boolean).join(' · ');
+  return `<a href="${escapeHtml(event.html_link || event.htmlLink || '#')}" target="_blank" rel="noreferrer"><span>${escapeHtml(label)}</span><strong>${escapeHtml(event.summary || 'Untitled')}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</a>`;
 }
 
 async function renderCalendar(el) {
@@ -987,56 +1079,39 @@ async function renderCalendar(el) {
   const cells = [];
   for (let i = 0; i < first.getDay(); i += 1) cells.push('<span></span>');
   for (let day = 1; day <= days; day += 1) cells.push(`<strong class="${day === now.getDate() ? 'today' : ''}">${day}</strong>`);
-  let eventsHtml = '<small>Loading Google Calendar…</small>';
+  let bodyHtml = '<small>Loading Google Calendar…</small>';
+  let connected = false;
   try {
     const calendar = await api('/api/overview/calendar?days=31');
-    const auth = calendar.google_calendar || {};
-    const events = Array.isArray(calendar.events) ? calendar.events.slice(0, 4) : [];
-    if (auth.connected && events.length) {
-      eventsHtml = `<div class="calendar-events">${events.map((event) => {
-        const startValue = event.start?.dateTime || event.start?.date || '';
-        const start = startValue ? new Date(startValue) : null;
-        const label = start && !Number.isNaN(start.getTime()) ? start.toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Soon';
-        return `<a href="${escapeHtml(event.htmlLink || '#')}" target="_blank" rel="noreferrer"><span>${escapeHtml(label)}</span><strong>${escapeHtml(event.summary || 'Untitled')}</strong></a>`;
-      }).join('')}<button class="button secondary calendar-disconnect" type="button" data-google-calendar-disconnect>Disconnect</button></div>`;
-    } else if (auth.connected) {
-      eventsHtml = '<div class="calendar-events"><small>No upcoming Google Calendar events.</small><button class="button secondary calendar-disconnect" type="button" data-google-calendar-disconnect>Disconnect</button></div>';
+    const state = calendar.google_calendar || {};
+    connected = Boolean(state.connected);
+    const status = calendar.status || state.status || (connected ? 'connected' : state.configured ? 'configured' : 'setup_required');
+    const note = calendar.stale ? 'Showing cached Google Calendar events because refresh failed.' : (calendar.error || state.message || '');
+    const events = Array.isArray(calendar.events) ? calendar.events.slice(0, 5) : [];
+    if (status === 'setup_required') {
+      bodyHtml = calendarSetupHtml({ status, message: state.message || calendar.message || 'Google Calendar server OAuth is not configured.' });
+    } else if (connected) {
+      const eventHtml = events.length ? events.map(calendarEventHtml).join('') : '<small>No upcoming Google Calendar events.</small>';
+      bodyHtml = `<div class="calendar-events">${note ? `<small class="calendar-status${calendar.stale ? ' calendar-stale' : ''}">${escapeHtml(note)}</small>` : ''}${eventHtml}<div class="calendar-actions"><button class="button secondary" type="button" data-google-calendar-refresh>Refresh</button><button class="button secondary" type="button" data-google-calendar-disconnect>Disconnect</button></div></div>`;
+    } else if (state.configured) {
+      bodyHtml = calendarSetupHtml({ status: 'configured', message: note || state.message });
     } else {
-      eventsHtml = calendarSetupHtml(auth);
+      bodyHtml = calendarSetupHtml({ status, message: note || state.message });
     }
   } catch (error) {
-    eventsHtml = `<small>Calendar sync unavailable: ${escapeHtml(error.message)}</small>`;
+    bodyHtml = `<div class="calendar-auth"><small>Calendar sync unavailable: ${escapeHtml(error.message || 'Google Calendar unavailable')}</small></div>`;
   }
-  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong><button class="button secondary" type="button" data-google-calendar-refresh>Refresh</button></header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${eventsHtml}`;
-}
-
-async function saveGoogleCalendarClient(button) {
-  const auth = button.closest('[data-calendar-auth]');
-  const status = auth?.querySelector('[data-google-calendar-status]');
-  const textarea = auth?.querySelector('[data-google-client-secret]');
-  const value = textarea?.value.trim() || '';
-  if (!value) {
-    if (status) status.textContent = 'Paste the OAuth client JSON first.';
-    return;
-  }
-  if (status) status.textContent = 'Saving OAuth client…';
-  try {
-    await api('/api/overview/google-calendar/client-secret', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_secret_json: value }) });
-    const widget = button.closest('[data-calendar-widget]');
-    await renderCalendar(widget);
-  } catch (error) {
-    if (status) status.textContent = error.message || 'Could not save OAuth client.';
-  }
+  el.innerHTML = `<header><strong>${now.toLocaleDateString([], { month: 'long', year: 'numeric' })}</strong>${connected ? '<small>Connected</small>' : ''}</header><div class="calendar-days"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>${cells.join('')}</div>${bodyHtml}`;
 }
 
 async function connectGoogleCalendar(button) {
   const auth = button.closest('[data-calendar-auth]');
-  const status = auth?.querySelector('[data-google-calendar-status]');
+  const status = auth?.querySelector('[data-google-calendar-status]') || auth?.querySelector('small');
   if (status) status.textContent = 'Opening Google sign-in…';
   try {
     const result = await api('/api/overview/google-calendar/auth-url', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ redirect_uri: `${window.location.origin}/api/overview/google-calendar/callback` }) });
     window.open(result.auth_url, '_blank', 'noopener,noreferrer');
-    if (status) status.textContent = 'Finish Google sign-in in the new tab, then click Refresh.';
+    if (status) status.textContent = 'Finish Google sign-in in the new tab. The widget will refresh automatically.';
   } catch (error) {
     if (status) status.textContent = error.message || 'Could not start Google sign-in.';
   }
@@ -1121,16 +1196,13 @@ function weatherConditionLabel(code) {
   return 'Weather';
 }
 
-function hourlyWeatherItems(hourly = {}, limit = 8) {
-  const times = Array.isArray(hourly.time) ? hourly.time : [];
-  const temps = Array.isArray(hourly.temperature_2m) ? hourly.temperature_2m : [];
-  const precipitation = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
-  const codes = Array.isArray(hourly.weather_code) ? hourly.weather_code : [];
+function hourlyWeatherItems(hourly = [], limit = 8) {
+  const rows = Array.isArray(hourly) ? hourly : [];
   const now = Date.now();
-  return times.map((time, index) => {
-    const date = new Date(time);
-    return { time, date, temp: temps[index], pop: precipitation[index], code: codes[index] };
-  }).filter((item) => item.date instanceof Date && !Number.isNaN(item.date.getTime()) && item.date.getTime() >= now - 60 * 60 * 1000).slice(0, limit);
+  return rows
+    .map((item) => ({ ...item, date: new Date(item.timestamp || item.time || item.date || '') }))
+    .filter((item) => item.date instanceof Date && !Number.isNaN(item.date.getTime()) && item.date.getTime() >= now - 60 * 60 * 1000)
+    .slice(0, limit);
 }
 
 async function renderWeather(el, { refreshLocation = false } = {}) {
@@ -1139,28 +1211,36 @@ async function renderWeather(el, { refreshLocation = false } = {}) {
   try {
     const location = await fetchClientWeatherLocation({ refresh: refreshLocation });
     const data = await api(`/api/overview/weather?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}`);
+    const current = data.current || {};
+    const daily = data.daily || {};
     if (!data.ok) {
-      el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(data.message || 'Weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
+      el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(data.message || data.error || 'Weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
       return;
     }
-    const c = data.current || {};
-    const daily = data.daily || {};
-    const temp = Number.isFinite(Number(c.temperature_2m)) ? `${Math.round(c.temperature_2m)}°C` : '—';
-    const humidity = Number.isFinite(Number(c.relative_humidity_2m)) ? `${Math.round(c.relative_humidity_2m)}% humidity` : 'humidity n/a';
-    const wind = Number.isFinite(Number(c.wind_speed_10m)) ? `${Math.round(c.wind_speed_10m)} km/h wind` : 'wind n/a';
-    const condition = weatherConditionLabel(c.weather_code);
-    const high = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(daily.temperature_2m_max[0]) : null;
-    const low = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(daily.temperature_2m_min[0]) : null;
+    const tempValue = current.temperature ?? current.temperature_2m;
+    const humidityValue = current.humidity ?? current.relative_humidity_2m;
+    const windValue = current.wind_speed ?? current.wind_speed_10m;
+    const temp = Number.isFinite(Number(tempValue)) ? `${Math.round(Number(tempValue))}°` : '—';
+    const humidity = Number.isFinite(Number(humidityValue)) ? `${Math.round(Number(humidityValue))}% humidity` : 'humidity n/a';
+    const wind = Number.isFinite(Number(windValue)) ? `${Math.round(Number(windValue))} km/h wind` : 'wind n/a';
+    const condition = current.condition || weatherConditionLabel(current.weather_code);
+    const high = Array.isArray(daily.temperature_2m_max) && Number.isFinite(Number(daily.temperature_2m_max[0])) ? Math.round(Number(daily.temperature_2m_max[0])) : null;
+    const low = Array.isArray(daily.temperature_2m_min) && Number.isFinite(Number(daily.temperature_2m_min[0])) ? Math.round(Number(daily.temperature_2m_min[0])) : null;
     const range = high !== null && low !== null ? ` · H ${high}° / L ${low}°` : '';
     const label = weatherLabel(location);
-    const hourly = hourlyWeatherItems(data.hourly, 8);
+    const hourly = hourlyWeatherItems(data.hourly, 6);
     const hourlyHtml = hourly.length ? `<div class="weather-hourly" aria-label="Hourly forecast">${hourly.map((item) => {
       const hour = item.date.toLocaleTimeString([], { hour: 'numeric' });
-      const itemTemp = Number.isFinite(Number(item.temp)) ? `${Math.round(item.temp)}°` : '—';
-      const pop = Number.isFinite(Number(item.pop)) ? `${Math.round(item.pop)}%` : '—';
-      return `<article><span>${escapeHtml(hour)}</span><strong>${escapeHtml(itemTemp)}</strong><small>${escapeHtml(weatherConditionLabel(item.code))} · ${escapeHtml(pop)}</small></article>`;
+      const itemTempValue = item.temperature ?? item.temperature_2m;
+      const itemTemp = Number.isFinite(Number(itemTempValue)) ? `${Math.round(Number(itemTempValue))}°` : '—';
+      const popValue = item.precipitation_probability;
+      const pop = Number.isFinite(Number(popValue)) ? `${Math.round(Number(popValue))}%` : '—';
+      const windHourValue = item.wind_speed ?? item.wind_speed_10m;
+      const detail = [item.condition || weatherConditionLabel(item.weather_code), pop, Number.isFinite(Number(windHourValue)) ? `${Math.round(Number(windHourValue))} km/h` : null].filter(Boolean).join(' · ');
+      return `<article><span>${escapeHtml(hour)}</span><strong>${escapeHtml(itemTemp)}</strong><small>${escapeHtml(detail)}</small></article>`;
     }).join('')}</div>` : '';
-    el.innerHTML = `<div class="weather-current"><strong>${temp}</strong><small>${escapeHtml(condition)} · ${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small></div>${hourlyHtml}`;
+    const note = data.stale ? '<small class="weather-note">Showing cached weather because refresh failed.</small>' : (data.error ? `<small class="weather-note">${escapeHtml(data.error)}</small>` : '');
+    el.innerHTML = `<div class="weather-current"><strong>${temp}</strong><small>${escapeHtml(condition)} · ${humidity} · ${wind}${range}</small><small>${escapeHtml(label)} · client IP location</small></div>${note}${hourlyHtml}`;
   } catch (error) {
     el.innerHTML = `<strong>Weather</strong><small>${escapeHtml(error.message || 'Client weather unavailable')}</small><button class="button secondary" data-weather-location="true">Retry client location</button>`;
   }
@@ -2257,9 +2337,6 @@ function configureRefreshIntervals() {
     try {
       apps = await api('/api/apps?health=true');
       if (currentRoute === 'overview') {
-        overviewStatus = await api('/api/overview/status').catch(() => overviewStatus);
-        const strip = document.querySelector('.overview-health-strip');
-        if (strip) strip.outerHTML = overviewHealthStripHtml();
         drawOverviewApps();
       }
       if (currentRoute === 'apps') renderAppsPage();
@@ -2277,7 +2354,6 @@ async function load() {
       api('/api/overview/bootstrap').catch(async () => ({ overview: await api('/api/overview').catch(() => defaultOverviewConfig()), metrics: await api('/api/metrics'), apps: await api('/api/apps?health=true').catch(() => []), apps_summary: {}, ok: false })),
       api('/api/settings').catch(() => ({ stocks: [], pinned_app_ids: [] })),
     ]);
-    overviewStatus = bootstrapRows;
     metrics = bootstrapRows.metrics;
     apps = bootstrapRows.apps || [];
     const overviewRows = bootstrapRows.overview || defaultOverviewConfig();
@@ -2391,7 +2467,10 @@ contentEl.addEventListener('input', (event) => {
 
 contentEl.addEventListener('click', async (event) => {
   const manager = document.querySelector('#widget-manager');
-  if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) manager.hidden = true;
+  if (manager && !manager.hidden && !event.target.closest('#widget-manager, .overview-floating-nav')) {
+    manager.hidden = true;
+    scheduleOverviewDockSpacingUpdate();
+  }
   if (!event.target.closest('.bookmark-widget')) document.querySelectorAll('.bookmark-form:not([hidden])').forEach((form) => { form.hidden = true; });
   if (!event.target.closest('#overview-search-form')) document.querySelector('#overview-search-results')?.setAttribute('hidden', '');
   const deleteButton = event.target.closest('[data-delete-widget]');
@@ -2426,11 +2505,6 @@ contentEl.addEventListener('click', async (event) => {
     }
     return;
   }
-  const googleClientSave = event.target.closest('[data-google-client-save]');
-  if (googleClientSave) {
-    await saveGoogleCalendarClient(googleClientSave);
-    return;
-  }
   const googleConnect = event.target.closest('[data-google-calendar-connect]');
   if (googleConnect) {
     await connectGoogleCalendar(googleConnect);
@@ -2457,7 +2531,10 @@ contentEl.addEventListener('click', async (event) => {
   }
   if (event.target.closest('[data-add-widget]')) {
     const manager = document.querySelector('#widget-manager');
-    if (manager) manager.hidden = !manager.hidden;
+    if (manager) {
+      manager.hidden = !manager.hidden;
+      scheduleOverviewDockSpacingUpdate();
+    }
     return;
   }
   const catalogButton = event.target.closest('.widget-catalog-card[data-widget-type]');
@@ -2612,9 +2689,16 @@ contentEl.addEventListener('submit', (event) => {
   if (event.target.classList.contains('webview-toolbar')) {
     event.preventDefault();
     const widget = event.target.closest('[data-widget-id]');
-    const frame = event.target.closest('[data-webview-widget]')?.querySelector('iframe');
+    const webviewRoot = event.target.closest('[data-webview-widget]');
+    const frame = webviewRoot?.querySelector('iframe');
     const url = safeUrl(new FormData(event.target).get('url'));
+    const blocked = isBlockedWebviewUrl(url);
     if (widget) writeWebviewUrl(widget.dataset.widgetId, url);
+    if (blocked && url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      if (frame) frame.src = 'about:blank';
+      return;
+    }
     if (frame) frame.src = url || 'about:blank';
     return;
   }
@@ -2638,6 +2722,23 @@ contentEl.addEventListener('submit', (event) => {
 
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modalEl.hidden) closeModal(); });
 window.addEventListener('hashchange', () => { currentRoute = routeFromHash(); if (window.location.hash.replace('#', '') !== currentRoute) window.location.hash = currentRoute; render(); });
+window.addEventListener('resize', scheduleOverviewResponsiveRender, { passive: true });
+window.addEventListener('orientationchange', scheduleOverviewResponsiveRender, { passive: true });
+
+function refreshOverviewCalendarWidgets() {
+  document.querySelectorAll('[data-calendar-widget]').forEach((widget) => {
+    renderCalendar(widget).catch(() => {});
+  });
+}
+
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type === 'overview-google-calendar-connected') refreshOverviewCalendarWidgets();
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'googleCalendarConnectedAt') refreshOverviewCalendarWidgets();
+});
 
 async function loadSecondaryData() {
   try {

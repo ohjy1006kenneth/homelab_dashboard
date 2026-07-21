@@ -78,9 +78,9 @@ input[type='search']:focus { border-color: #444; }
 .loader-orb { width: 34px; height: 34px; border-radius: 999px; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin 850ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 820px) {
-  .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
-  nav { grid-template-columns: repeat(5, max-content); overflow-x: auto; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: static; height: auto; min-width: 0; max-width: 100%; border-right: 0; border-bottom: 1px solid var(--border); }
+  nav { grid-template-columns: repeat(5, max-content); overflow-x: auto; min-width: 0; max-width: 100%; }
   .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
 }
@@ -93,7 +93,7 @@ input[type='search']:focus { border-color: #444; }
 
 @media (max-width: 640px) {
   :root { --topbar-h: auto; }
-  body { overflow-x: hidden; }
+  body { overflow-x: visible; }
   .shell { width: 100%; }
   .sidebar { padding: 14px 12px; gap: 14px; }
   .brand { justify-content: center; }
@@ -577,14 +577,23 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .clock-widget { height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
 .clock-widget strong { font: 500 clamp(28px, 5vw, 56px) var(--font-mono); letter-spacing: -.06em; }
 .clock-widget small { color: var(--text-secondary); }
-.calendar-widget { display: grid; gap: 12px; }
-.calendar-widget header { color: var(--text-primary); }
+.calendar-widget { display: grid; gap: 10px; overflow: hidden; }
+.calendar-widget header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--text-primary); }
+.calendar-widget header strong { min-width: 0; }
+.calendar-widget header small { color: var(--text-secondary); font: 11px var(--font-mono); white-space: nowrap; }
 .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center; }
 .calendar-days span { color: var(--text-muted); font: 11px var(--font-mono); }
 .calendar-days strong { display: grid; place-items: center; min-height: 30px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); background: #080808; font: 12px var(--font-mono); }
 .calendar-days strong.today { color: #050505; background: var(--accent); border-color: var(--accent); }
-.weather-widget { height: 100%; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; }
-.weather-widget strong { font: 500 38px var(--font-mono); }
+.calendar-events { display: grid; gap: 8px; margin-top: 6px; min-height: 0; overflow: hidden; }
+.calendar-events a { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; color: inherit; border: 1px solid var(--border-soft); border-radius: 10px; padding: 6px 8px; background: #080808; }
+.calendar-events a:hover { background: var(--bg-hover); border-color: #444; }
+.calendar-events a span { color: var(--text-muted); font: 10px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+.calendar-events a strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.calendar-events a small { color: var(--text-muted); font: 10px var(--font-mono); grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-status { color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.weather-widget { height: 100%; display: grid; gap: 10px; align-content: start; justify-items: stretch; text-align: left; overflow: hidden; }
+.weather-widget strong { font: 500 18px var(--font-mono); }
 .weather-widget small { color: var(--text-secondary); line-height: 1.45; }
 .calculator-widget { display: grid; gap: 10px; }
 .calculator-widget input { width: 100%; background: #050505; color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px; text-align: right; font: 22px var(--font-mono); }
@@ -603,11 +612,17 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 
 /* Overview widget polish per Kenneth feedback */
 .overview-board-head { display: none !important; }
-.content:has(.overview-floating-nav) { padding-bottom: 110px; }
+.content:has(.overview-floating-nav) { padding-bottom: calc(var(--overview-dock-space, 160px) + 24px); }
 .overview-floating-nav { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 8; width: min(860px, calc(100vw - 28px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; background: rgba(8,8,8,.82); backdrop-filter: blur(18px); box-shadow: 0 16px 50px rgba(0,0,0,.38); }
 .overview-floating-nav .overview-web-search { min-width: 0; }
 .overview-floating-nav input[type='search'] { min-height: 42px; }
 .overview-floating-nav .button { min-height: 42px; }
+.overview-web-search { position: relative; }
+.overview-search-results { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 18px; background: rgba(5,5,5,.94); box-shadow: 0 20px 60px rgba(0,0,0,.45); backdrop-filter: blur(18px); z-index: 40; }
+.overview-search-result { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 9px; color: inherit; border-radius: 12px; padding: 7px; }
+.overview-search-result:hover { background: var(--bg-hover); }
+.overview-search-result strong, .overview-search-result small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overview-search-result small { color: var(--text-muted); font-size: 11px; }
 .overview-widget { grid-template-rows: minmax(0, 1fr); position: relative; }
 .overview-widget-head { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 4; opacity: 0; transform: translateY(-7px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,.12); background: rgba(5,5,5,.82); backdrop-filter: blur(10px); }
 .overview-widget:hover .overview-widget-head, .overview-widget:focus-within .overview-widget-head { opacity: 1; transform: translateY(0); pointer-events: auto; }
@@ -1007,11 +1022,7 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
   background: rgba(255,255,255,.4);
 }
 .grid-stack-item .ui-resizable-se,
-.grid-stack-item .ui-resizable-sw,
-.grid-stack-item:hover .ui-resizable-se,
-.grid-stack-item:hover .ui-resizable-sw,
-.grid-stack-item:focus-within .ui-resizable-se,
-.grid-stack-item:focus-within .ui-resizable-sw {
+.grid-stack-item .ui-resizable-sw {
   bottom: 4px !important;
   top: auto !important;
   width: 18px !important;
@@ -1024,47 +1035,73 @@ main, .content, .panel, .panel-head, .manager-head, .news-list, .news-card, .cur
 .grid-stack-item .ui-resizable-se { right: 6px !important; cursor: se-resize !important; }
 .grid-stack-item .ui-resizable-sw { left: 6px !important; cursor: sw-resize !important; }
 .grid-stack-item .ui-resizable-e,
-.grid-stack-item .ui-resizable-w { top: 48px !important; bottom: 22px !important; height: auto !important; min-height: 24px; }
-.weather-widget { container-type: size; padding: 2px; }
-.weather-current { display: grid; justify-items: center; gap: 6px; min-width: 0; }
-.weather-current strong { font: 500 clamp(30px, 8cqw, 48px) var(--font-mono); letter-spacing: -.06em; }
-.weather-current small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.weather-hourly { display: none; width: 100%; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; overflow: hidden; }
-.weather-hourly article { min-width: 0; display: grid; gap: 3px; justify-items: center; border: 1px solid var(--border-soft); border-radius: 12px; background: #080808; padding: 7px 6px; }
-.weather-hourly span { color: var(--text-muted); font: 10px var(--font-mono); }
-.weather-hourly strong { font: 600 16px var(--font-mono); }
-.weather-hourly small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 10px; }
-@container (min-width: 300px) and (min-height: 230px) {
-  .weather-widget { align-content: stretch; place-items: stretch; }
-  .weather-current { align-content: center; }
-  .weather-hourly { display: grid; align-self: end; }
+.grid-stack-item .ui-resizable-w {
+  top: 48px !important;
+  bottom: 22px !important;
+  height: auto !important;
+  min-height: 24px;
 }
-@container (min-width: 430px) and (min-height: 260px) {
-  .weather-hourly { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-}
-
-
-/* Overview Google Calendar OAuth UI */
-.calendar-widget header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.calendar-widget header .button { min-height: 26px; padding: 4px 8px; font-size: 11px; }
-.calendar-auth { display: grid; gap: 7px; min-height: 0; overflow: hidden; }
-.calendar-auth textarea { width: 100%; min-height: 58px; max-height: 120px; resize: vertical; border: 1px solid var(--border-soft); border-radius: 10px; background: #050505; color: var(--text); padding: 8px; font: 11px var(--font-mono); }
-.calendar-auth-actions { display: flex; gap: 7px; flex-wrap: wrap; }
-.calendar-auth-actions .button { flex: 1 1 110px; min-height: 32px; padding: 7px 10px; }
+/* Overview backend widgets: synced calendar/weather details */
+.calendar-widget { gap: 10px; overflow: hidden; }
+.calendar-events { display: grid; gap: 7px; margin-top: 6px; min-height: 0; overflow: hidden; }
+.calendar-events a { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; color: inherit; border: 1px solid var(--border-soft); border-radius: 10px; padding: 6px 8px; background: #080808; }
+.calendar-events a:hover { background: var(--bg-hover); border-color: #444; }
+.calendar-events a span { color: var(--text-muted); font: 10px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+.calendar-events a strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.calendar-events a small { color: var(--text-muted); font: 10px var(--font-mono); grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-events .calendar-status { grid-column: 1 / -1; }
+.calendar-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 2px; }
+.calendar-actions .button { flex: 1 1 110px; min-height: 30px; padding: 6px 10px; }
+.calendar-auth { display: grid; gap: 8px; min-height: 0; overflow: hidden; }
 .calendar-auth small { color: var(--text-secondary); line-height: 1.35; }
-.calendar-disconnect { margin-top: 2px; justify-self: start; min-height: 30px; padding: 6px 10px; }
+.calendar-auth .button { justify-self: start; min-height: 34px; padding: 7px 12px; }
+.calendar-state { gap: 10px; }
+.calendar-state-setup { opacity: .95; }
+.weather-widget { container-type: size; padding: 2px; display: grid; gap: 10px; align-content: start; justify-items: stretch; text-align: left; overflow: hidden; }
+.weather-current { display: grid; gap: 5px; align-content: start; min-width: 0; }
+.weather-current strong { font: 500 clamp(30px, 8cqw, 48px) var(--font-mono); letter-spacing: -.06em; line-height: 1; }
+.weather-current small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weather-note { color: var(--text-secondary); font-size: 11px; line-height: 1.35; white-space: normal; }
+.weather-hourly { display: none; width: 100%; min-width: 0; gap: 8px; overflow-x: auto; overflow-y: hidden; padding: 2px 1px 4px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.weather-hourly article { flex: 0 0 112px; display: grid; gap: 4px; justify-items: flex-start; align-items: start; border: 1px solid var(--border-soft); border-radius: 12px; background: #080808; padding: 8px 9px; scroll-snap-align: start; }
+.weather-hourly span { color: var(--text-muted); font: 10px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; }
+.weather-hourly strong { font: 600 17px var(--font-mono); line-height: 1; }
+.weather-hourly small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 10px; line-height: 1.35; }
+@media (max-width: 820px) { .calendar-days { gap: 4px; } .calendar-events a { grid-template-columns: 1fr; } .calendar-events a small { grid-column: 1; } }
 
 
 /* Overview maturity pass */
-.overview-health-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
-.overview-health-strip article { border: 1px solid var(--border-soft); border-radius: 16px; background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); padding: 10px 12px; min-width: 0; }
-.overview-health-strip span { display: block; color: var(--text-muted); font: 10px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; }
-.overview-health-strip strong { display: block; margin-top: 4px; font: 600 16px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.overview-web-search { position: relative; }
-.overview-search-results { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 18px; background: rgba(5,5,5,.94); box-shadow: 0 20px 60px rgba(0,0,0,.45); backdrop-filter: blur(18px); z-index: 40; }
-.overview-search-result { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 9px; color: inherit; border-radius: 12px; padding: 7px; }
-.overview-search-result:hover { background: var(--bg-hover); }
 .overview-search-result strong, .overview-search-result small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overview-search-result small { color: var(--text-muted); font-size: 11px; }
 .weather-current small:last-child::after { content: ''; }
-@media (max-width: 820px) { .overview-health-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-health-strip article:last-child { display: none; } }
+
+@media (max-width: 820px) {
+  .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; overflow: visible; min-width: 0; max-width: 100%; }
+  .sidebar nav a { text-align: center; white-space: nowrap; }
+  .sidebar nav a[href="#settings"] { grid-column: 1 / -1; }
+  .overview-mobile-reflow .overview-widget-grid { min-height: 0; }
+  .overview-mobile-reflow .overview-widget { grid-template-rows: auto minmax(0, 1fr); }
+  .overview-mobile-reflow .overview-widget-head {
+    position: static;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    margin: 0 0 10px;
+  }
+  .overview-mobile-reflow .overview-widget-head strong { color: var(--text-primary); }
+  .overview-mobile-reflow .widget-drag-handle { display: none; }
+  .overview-mobile-reflow .overview-widget-body { grid-row: 2; }
+  .overview-mobile-reflow .grid-stack-item .ui-resizable-handle { display: none !important; }
+}
+
+@media (max-width: 640px) {
+  .content { padding: 14px 12px 24px; gap: 14px; }
+}
+
+@container (min-width: 440px) and (min-height: 200px) {
+  .weather-hourly { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.weather-current small { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.weather-hourly { grid-auto-rows: minmax(60px, auto); gap: 8px; overflow: hidden; }
+.weather-hourly article { min-width: 0; display: grid; gap: 4px; justify-items: flex-start; align-items: start; border: 1px solid var(--border-soft); border-radius: 12px; background: #080808; padding: 8px 9px; }
+.weather-hourly small { white-space: nowrap; }
