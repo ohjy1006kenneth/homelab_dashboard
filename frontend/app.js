@@ -1889,7 +1889,111 @@ function stockAuditHtml() {
 }
 
 function renderStocksPage() {
-  contentEl.innerHTML = stockAuditHtml();
+  contentEl.innerHTML = stockEvidenceHtml();
+}
+
+const STOCK_IDENTITY = {
+  run_id: 'layer1-daily-2026-06-18-2026-06-18-post-pr288-modal-t4-v1',
+  from_date: '2026-06-18',
+  to_date: '2026-06-18',
+  ticker: 'AAPL',
+};
+
+function stockValue(value) {
+  if (value === null || value === undefined) return 'Unknown';
+  if (Array.isArray(value)) return value.length ? value.map((item) => stockValue(item)).join(', ') : '[]';
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function stockPath(object, path, fallback = null) {
+  const value = path.split('.').reduce((current, key) => current && typeof current === 'object' ? current[key] : undefined, object);
+  return value === undefined ? fallback : value;
+}
+
+function stockIdentity(payload) {
+  const controls = payload?.controls || {};
+  return { run_id: controls.run_id, from_date: controls.from_date, to_date: controls.to_date, ticker: String(controls.ticker || '').toUpperCase() };
+}
+
+function stockIdentityMatches(identity) {
+  return ['run_id', 'from_date', 'to_date', 'ticker'].every((key) => String(identity[key] || '') === String(STOCK_IDENTITY[key]));
+}
+
+function stockCountRows(name, counts) {
+  const row = counts?.[name] || {};
+  const total = row.row_count ?? row.total_count;
+  const sample = row.sample_count ?? row.sampled_count;
+  const omitted = row.omitted_row_count ?? row.omitted_count;
+  const valid = [total, sample, omitted].every((value) => Number.isInteger(Number(value))) && Number(total) === Number(sample) + Number(omitted);
+  return { name, total, sample, omitted, truncated: row.truncated, valid };
+}
+
+function stockCountTable(payload) {
+  const counts = payload?.pipeline_section_counts || {};
+  const rows = Object.keys(counts).map((name) => stockCountRows(name, counts));
+  const articleTotal = payload?.article_group_count;
+  const articleSample = payload?.article_group_sample_count;
+  const articleOmitted = payload?.article_group_omitted_count;
+  if ([articleTotal, articleSample, articleOmitted].some((value) => value !== undefined)) rows.push({ name: 'article_groups', total: articleTotal, sample: articleSample, omitted: articleOmitted, truncated: payload?.article_groups_truncated, valid: Number(articleTotal) === Number(articleSample) + Number(articleOmitted) });
+  const topic = payload?.topic_relevance_review || {};
+  [['topic_articles', 'article_count', 'article_sample_count', 'article_omitted_count', 'articles_truncated'], ['topic_rows', 'row_count', 'row_sample_count', 'row_omitted_count', 'rows_truncated']].forEach(([name, totalKey, sampleKey, omittedKey, truncatedKey]) => {
+    if (topic[totalKey] !== undefined) rows.push({ name, total: topic[totalKey], sample: topic[sampleKey], omitted: topic[omittedKey], truncated: topic[truncatedKey], valid: Number(topic[totalKey]) === Number(topic[sampleKey]) + Number(topic[omittedKey]) });
+  });
+  return rows;
+}
+
+function stockRows(payload) {
+  const groups = [];
+  const add = (label, value) => { if (Array.isArray(value) && value.length) groups.push({ label, rows: value }); };
+  add('Pipeline samples', payload?.pipeline_sections);
+  add('Article groups', payload?.article_groups);
+  add('Topic relevance', payload?.topic_relevance_review?.rows || payload?.topic_relevance_review?.articles);
+  add('Semantic aggregate', payload?.semantic_aggregate_review?.rows || payload?.semantic_aggregate_review?.aggregates);
+  return groups;
+}
+
+function stockRowsHtml(rows) {
+  return rows.slice(0, 20).map((row) => {
+    const ticker = row?.ticker ?? row?.symbol ?? row?.company_ticker;
+    const tickerError = ticker !== undefined && String(ticker).toUpperCase() !== STOCK_IDENTITY.ticker;
+    const entries = Object.entries(row || {}).filter(([key]) => !['article_text', 'sentence_text', 'chunk_text', 'text', 'provenance'].includes(key)).slice(0, 12);
+    return `<div class="stock-evidence-row ${tickerError ? 'stock-contract-error' : ''}">${entries.map(([key, value]) => `<span><b>${escapeHtml(key)}</b> ${escapeHtml(stockValue(value))}</span>`).join('')}${tickerError ? '<strong>Contract-integrity error: non-AAPL ticker</strong>' : ''}</div>`;
+  }).join('');
+}
+
+function stockEvidenceHtml() {
+  if (!stockAudit) return '<section class="panel stock-evidence"><div class="panel-head"><div><p class="eyebrow">Stock evidence</p><h2>Loading fixed identity review…</h2></div><button class="button secondary" data-refresh-stock-audit="true">Refresh</button></div></section>';
+  if (!stockAudit.ok) return `<section class="panel review-ready-panel fail"><div class="panel-head"><div><p class="eyebrow">Stock evidence gateway</p><h2>Evidence unavailable</h2><p class="section-copy">${escapeHtml(stockAudit.reason || stockAudit.error || 'The review service did not return a usable evidence payload.')}</p></div><button class="button secondary" data-refresh-stock-audit="true">Retry</button></div></section>`;
+  const payload = stockAudit.payload || stockAudit;
+  const returned = stockIdentity(payload);
+  const identityMismatch = !stockIdentityMatches(returned);
+  const counts = stockCountTable(payload);
+  const arithmeticError = counts.some((row) => !row.valid);
+  const readiness = payload.readiness || {};
+  const readinessValues = {
+    readiness_status: payload.readiness_status ?? readiness.readiness_status,
+    recommendation: payload.recommendation ?? readiness.recommendation,
+    human_review_can_start: payload.human_review_can_start ?? readiness.human_review_can_start,
+    ready_for_final_human_acceptance: payload.ready_for_final_human_acceptance ?? readiness.ready_for_final_human_acceptance,
+    ready_for_layer2: payload.ready_for_layer2 ?? readiness.ready_for_layer2,
+  };
+  const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+  const integrity = identityMismatch || arithmeticError;
+  const issue = identityMismatch ? 'Contract error: returned identity does not match the requested identity.' : arithmeticError ? 'Contract-integrity error: canonical/sample/omitted counts do not reconcile.' : '';
+  const countRows = counts.map((row) => `<tr><th>${escapeHtml(row.name)}</th><td>${escapeHtml(stockValue(row.total))}</td><td>${escapeHtml(stockValue(row.sample))}</td><td>${escapeHtml(stockValue(row.omitted))}</td><td>${escapeHtml(stockValue(row.truncated))}</td><td>${row.valid ? 'valid' : 'invalid'}</td></tr>`).join('');
+  const groups = stockRows(payload);
+  return `<section class="panel stock-evidence">
+    <div class="panel-head manager-head"><div><p class="eyebrow">AI Stock Trader · fixed identity</p><h2>AAPL Layer 1 evidence</h2><p class="section-copy">Historical / stale for current use. Same identity; refresh is not a rerun.</p></div><button class="button secondary" data-refresh-stock-audit="true" ${stockAudit.loading ? 'disabled' : ''}>${stockAudit.loading ? 'Refreshing…' : 'Refresh same identity'}</button></div>
+    <div class="stock-identity-grid"><article><strong>Requested identity</strong><code>${escapeHtml(JSON.stringify(STOCK_IDENTITY))}</code></article><article><strong>Returned identity</strong><code>${escapeHtml(JSON.stringify(returned))}</code></article></div>
+    <p class="stock-fetched">Fetched: ${escapeHtml(stockAudit.fetchedAt || 'not yet recorded')} · no browser/proxy cache</p>
+    ${issue ? `<div class="stock-contract-error" role="alert"><strong>${escapeHtml(issue)}</strong><p>Evidence is hidden until the contract is restored.</p></div>` : ''}
+    ${!integrity ? `<section class="stock-readiness ${readinessValues.human_review_can_start === true ? 'stock-ready' : 'stock-not-ready'}"><div><p class="eyebrow">Hard readiness boundary</p><h3>${readinessValues.human_review_can_start === true ? 'Human review can start' : 'Human review cannot start'}</h3><p>Mechanical readiness never overrides human_review_can_start=false.</p></div><div class="stock-readiness-grid">${Object.entries(readinessValues).map(([key, value]) => `<span><b>${escapeHtml(key)}</b><em>${escapeHtml(stockValue(value))}</em></span>`).join('')}</div></section>` : ''}
+    <section><h3>Warnings and provenance</h3>${warnings.length ? `<ul class="audit-warning-list">${warnings.slice(0, 20).map((warning) => `<li>${escapeHtml(stockValue(warning))}</li>`).join('')}</ul>` : '<p class="empty compact">No warnings returned.</p>'}</section>
+    <section><h3>Coverage arithmetic</h3><div class="audit-table-wrap"><table class="audit-table"><thead><tr><th>Collection</th><th>Canonical total</th><th>Sample</th><th>Omitted</th><th>Truncated</th><th>Validation</th></tr></thead><tbody>${countRows || '<tr><td colspan="6">No collection counts returned.</td></tr>'}</tbody></table></div></section>
+    ${!integrity ? groups.map((group, index) => `<details class="stock-evidence-section" ${index === 0 ? '' : ''}><summary>${escapeHtml(group.label)} <small>${group.rows.length} sampled rows</small></summary><div class="stock-evidence-scroll">${stockRowsHtml(group.rows)}</div></details>`).join('') : ''}
+  </section>`;
 }
 
 function optionSelected(current, value) {
@@ -2794,25 +2898,21 @@ async function loadSecondaryData() {
     if (currentRoute !== 'overview') render();
   } catch (_) {}
 
-  api('/api/stocks/review-options')
-    .then((stockReviewRows) => {
-      stockReviewOptions = stockReviewRows;
-      stockAudit = stockReviewRows;
-      if (stockReviewRows?.ok) ensureStockSelectionFromOptions(stockReviewRows);
-      if (currentRoute === 'stocks') renderStocksPage();
-      if (stockReviewRows?.ok) refreshStockAudit({ quiet: true }).catch(() => {});
-    })
-    .catch((error) => {
-      stockReviewOptions = { ok: false, status: 'unavailable', reason: error.message };
-      stockAudit = stockReviewOptions;
-      if (currentRoute === 'stocks') renderStocksPage();
-    });
+  refreshStockAudit({ quiet: true }).catch((error) => {
+    stockAudit = { ok: false, status: 'unavailable', reason: error.message };
+    if (currentRoute === 'stocks') renderStocksPage();
+  });
 }
 
 async function refreshStockAudit({ quiet = false } = {}) {
-  if (!quiet) setStatus('Refreshing stock audit…');
-  ensureStockSelectionFromOptions(stockReviewOptions || stockAudit || {});
-  stockAudit = await api(stockAuditUrl()).catch((error) => ({ ok: false, status: 'unavailable', reason: error.message }));
+  if (!quiet) setStatus('Refreshing Stock evidence…');
+  stockAudit = { ...(stockAudit || {}), loading: true };
+  if (currentRoute === 'stocks') renderStocksPage();
+  const params = new URLSearchParams(STOCK_IDENTITY);
+  const fetchedAt = new Date().toISOString();
+  stockAudit = await api(`/api/stocks/review?${params.toString()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+    .then((payload) => ({ ok: true, status: 200, payload, fetchedAt }))
+    .catch((error) => ({ ok: false, status: 'unavailable', reason: error.message, fetchedAt }));
   if (!quiet) setStatus(stockAudit.ok ? 'Stock audit loaded' : 'Stock audit unavailable', stockAudit.ok ? 'ok' : 'error');
   if (currentRoute === 'stocks') renderStocksPage();
 }
