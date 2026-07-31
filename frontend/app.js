@@ -1944,23 +1944,75 @@ function stockCountTable(payload) {
   return rows;
 }
 
-function stockRows(payload) {
-  const groups = [];
-  const add = (label, value) => { if (Array.isArray(value) && value.length) groups.push({ label, rows: value }); };
-  add('Pipeline samples', payload?.pipeline_sections);
-  add('Article groups', payload?.article_groups);
-  add('Topic relevance', payload?.topic_relevance_review?.rows || payload?.topic_relevance_review?.articles);
-  add('Semantic aggregate', payload?.semantic_aggregate_review?.rows || payload?.semantic_aggregate_review?.aggregates);
-  return groups;
+const STOCK_REQUIRED_SECTIONS = [
+  ['Article + relevance gate', ['article_groups', 'article_group_rows', 'article_relevance_review']],
+  ['Topic / relevance', ['topic_relevance_review']],
+  ['Semantic aggregate', ['semantic_aggregate_review']],
+  ['Pipeline stages / provenance', ['pipeline_sections']],
+  ['HMM / price / diagnostic context', ['hmm_price_diagnostics', 'hmm_context', 'price_diagnostics', 'diagnostics']],
+];
+
+function stockTickerValues(value, found = []) {
+  if (Array.isArray(value)) value.forEach((item) => stockTickerValues(item, found));
+  else if (value && typeof value === 'object') Object.entries(value).forEach(([key, item]) => {
+    if (['ticker', 'symbol', 'company_ticker'].includes(key)) found.push(item);
+    else stockTickerValues(item, found);
+  });
+  return found;
+}
+
+function stockRowsHaveValidTickers(rows) {
+  if (!Array.isArray(rows)) return true;
+  return rows.every((row) => {
+    const values = stockTickerValues(row);
+    return values.length > 0 && values.every((value) => String(value ?? '').trim().toUpperCase() === STOCK_IDENTITY.ticker);
+  });
+}
+
+function stockRowsFromValue(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'object') return [];
+  for (const key of ['rows', 'samples', 'sampled_rows', 'articles', 'aggregates']) if (Array.isArray(value[key])) return value[key];
+  return [];
+}
+
+function stockSections(payload) {
+  const sections = [];
+  const pipeline = payload?.pipeline_sections;
+  if (pipeline && typeof pipeline === 'object' && !Array.isArray(pipeline)) {
+    Object.entries(pipeline).forEach(([name, value]) => sections.push({ label: `Pipeline · ${name}`, value, rows: stockRowsFromValue(value) }));
+  }
+  STOCK_REQUIRED_SECTIONS.forEach(([label, keys]) => {
+    if (label === 'Pipeline stages / provenance') return;
+    const key = keys.find((candidate) => payload?.[candidate] !== undefined);
+    const value = key ? payload[key] : null;
+    sections.push({ label, value, rows: stockRowsFromValue(value) });
+  });
+  return sections;
+}
+
+function stockFieldHtml(key, value) {
+  const labels = {
+    source_score: 'Source score', source_relevance_score: 'Source score', gate_relevance_score: 'Gate relevance score', relevance_score: 'Gate relevance score',
+    gate_decision: 'Gate decision', score_source: 'Score source', article_id: 'Article', ticker: 'Ticker', date: 'Date', sentence_index: 'Sentence', chunk_id: 'Chunk',
+    target_impact_evidence_status: 'Target-impact status', target_impact_missing_flags: 'Missing flags', included_in_signal: 'Included in signal', final_contribution: 'Final contribution', final_signal_contribution: 'Final signal contribution',
+    relationship: 'Relationship', category: 'Category', target_context: 'Target context', direction: 'Direction', magnitude: 'Magnitude', horizon: 'Horizon', causal_channel: 'Causal channel', confidence: 'Confidence',
+  };
+  return `<span><b>${escapeHtml(labels[key] || key)}</b> ${escapeHtml(stockValue(value))}</span>`;
 }
 
 function stockRowsHtml(rows) {
   return rows.slice(0, 20).map((row) => {
-    const ticker = row?.ticker ?? row?.symbol ?? row?.company_ticker;
-    const tickerError = ticker !== undefined && String(ticker).toUpperCase() !== STOCK_IDENTITY.ticker;
-    const entries = Object.entries(row || {}).filter(([key]) => !['article_text', 'sentence_text', 'chunk_text', 'text', 'provenance'].includes(key)).slice(0, 12);
-    return `<div class="stock-evidence-row ${tickerError ? 'stock-contract-error' : ''}">${entries.map(([key, value]) => `<span><b>${escapeHtml(key)}</b> ${escapeHtml(stockValue(value))}</span>`).join('')}${tickerError ? '<strong>Contract-integrity error: non-AAPL ticker</strong>' : ''}</div>`;
+    const entries = Object.entries(row || {}).filter(([key]) => !['article_text', 'sentence_text', 'chunk_text', 'text'].includes(key)).slice(0, 40);
+    return `<div class="stock-evidence-row">${entries.map(([key, value]) => stockFieldHtml(key, value)).join('')}</div>`;
   }).join('');
+}
+
+function stockSectionHtml(section) {
+  const rows = section.rows || [];
+  const blocked = rows.length > 0 && !stockRowsHaveValidTickers(rows);
+  const state = blocked ? '<div class="stock-contract-error" role="alert"><strong>Contract-integrity error: affected section contains a foreign, blank, or missing ticker.</strong><p>Evidence rows are hidden; backend exclusion warnings and counts remain visible above.</p></div>' : rows.length ? `<div class="stock-evidence-scroll">${stockRowsHtml(rows)}</div>` : '<div class="empty compact">No sampled evidence supplied for this section. Diagnostic and provenance state remains visible in the payload.</div>';
+  return `<details class="stock-evidence-section"><summary>${escapeHtml(section.label)} <small>${rows.length} sampled rows</small></summary>${state}${section.value && typeof section.value === 'object' ? `<pre class="stock-provenance">${escapeHtml(JSON.stringify(section.value.provenance || section.value.load_provenance || {}, null, 2))}</pre>` : ''}</details>`;
 }
 
 function stockEvidenceHtml() {
@@ -1980,19 +2032,22 @@ function stockEvidenceHtml() {
     ready_for_layer2: payload.ready_for_layer2 ?? readiness.ready_for_layer2,
   };
   const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+  const artifactKeys = Array.isArray(payload.artifact_keys) ? payload.artifact_keys : [];
+  const provenance = payload.provenance || payload.load_provenance || payload.resolution_provenance || {};
+  const diagnostics = payload.diagnostics || payload.diagnostic_states || {};
   const integrity = identityMismatch || arithmeticError;
   const issue = identityMismatch ? 'Contract error: returned identity does not match the requested identity.' : arithmeticError ? 'Contract-integrity error: canonical/sample/omitted counts do not reconcile.' : '';
   const countRows = counts.map((row) => `<tr><th>${escapeHtml(row.name)}</th><td>${escapeHtml(stockValue(row.total))}</td><td>${escapeHtml(stockValue(row.sample))}</td><td>${escapeHtml(stockValue(row.omitted))}</td><td>${escapeHtml(stockValue(row.truncated))}</td><td>${row.valid ? 'valid' : 'invalid'}</td></tr>`).join('');
-  const groups = stockRows(payload);
+  const sections = stockSections(payload);
   return `<section class="panel stock-evidence">
     <div class="panel-head manager-head"><div><p class="eyebrow">AI Stock Trader · fixed identity</p><h2>AAPL Layer 1 evidence</h2><p class="section-copy">Historical / stale for current use. Same identity; refresh is not a rerun.</p></div><button class="button secondary" data-refresh-stock-audit="true" ${stockAudit.loading ? 'disabled' : ''}>${stockAudit.loading ? 'Refreshing…' : 'Refresh same identity'}</button></div>
     <div class="stock-identity-grid"><article><strong>Requested identity</strong><code>${escapeHtml(JSON.stringify(STOCK_IDENTITY))}</code></article><article><strong>Returned identity</strong><code>${escapeHtml(JSON.stringify(returned))}</code></article></div>
     <p class="stock-fetched">Fetched: ${escapeHtml(stockAudit.fetchedAt || 'not yet recorded')} · no browser/proxy cache</p>
     ${issue ? `<div class="stock-contract-error" role="alert"><strong>${escapeHtml(issue)}</strong><p>Evidence is hidden until the contract is restored.</p></div>` : ''}
     ${!integrity ? `<section class="stock-readiness ${readinessValues.human_review_can_start === true ? 'stock-ready' : 'stock-not-ready'}"><div><p class="eyebrow">Hard readiness boundary</p><h3>${readinessValues.human_review_can_start === true ? 'Human review can start' : 'Human review cannot start'}</h3><p>Mechanical readiness never overrides human_review_can_start=false.</p></div><div class="stock-readiness-grid">${Object.entries(readinessValues).map(([key, value]) => `<span><b>${escapeHtml(key)}</b><em>${escapeHtml(stockValue(value))}</em></span>`).join('')}</div></section>` : ''}
-    <section><h3>Warnings and provenance</h3>${warnings.length ? `<ul class="audit-warning-list">${warnings.slice(0, 20).map((warning) => `<li>${escapeHtml(stockValue(warning))}</li>`).join('')}</ul>` : '<p class="empty compact">No warnings returned.</p>'}</section>
+    <section><h3>Warnings and provenance</h3>${warnings.length ? `<ul class="audit-warning-list">${warnings.slice(0, 20).map((warning) => `<li>${escapeHtml(stockValue(warning))}</li>`).join('')}</ul>` : '<p class="empty compact">No warnings returned.</p>'}<div class="stock-provenance-grid"><article><strong>Artifact keys</strong><p>${escapeHtml(stockValue(artifactKeys))}</p></article><article><strong>Load / resolution provenance</strong><pre>${escapeHtml(JSON.stringify(provenance, null, 2))}</pre></article><article><strong>Diagnostic states</strong><pre>${escapeHtml(JSON.stringify(diagnostics, null, 2))}</pre></article></div></section>
     <section><h3>Coverage arithmetic</h3><div class="audit-table-wrap"><table class="audit-table"><thead><tr><th>Collection</th><th>Canonical total</th><th>Sample</th><th>Omitted</th><th>Truncated</th><th>Validation</th></tr></thead><tbody>${countRows || '<tr><td colspan="6">No collection counts returned.</td></tr>'}</tbody></table></div></section>
-    ${!integrity ? groups.map((group, index) => `<details class="stock-evidence-section" ${index === 0 ? '' : ''}><summary>${escapeHtml(group.label)} <small>${group.rows.length} sampled rows</small></summary><div class="stock-evidence-scroll">${stockRowsHtml(group.rows)}</div></details>`).join('') : ''}
+    ${!integrity ? sections.map(stockSectionHtml).join('') : ''}
   </section>`;
 }
 

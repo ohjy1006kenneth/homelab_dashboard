@@ -57,7 +57,7 @@ def review(
     except (URLError, TimeoutError, OSError):
         return _gateway_error("Stock review gateway could not reach the evidence service.")
 
-    if len(body) > MAX_BODY_BYTES:
+    if len(body) >= MAX_BODY_BYTES:
         return _gateway_error("Stock review response exceeded the 200000-byte gateway budget.")
     if status not in {200, 400, 404}:
         return _gateway_error("Stock review gateway received an unsupported upstream status.")

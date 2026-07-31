@@ -348,6 +348,9 @@ button.button { font-family: inherit; }
 .stock-evidence-scroll { display: grid; gap: 8px; max-height: 420px; overflow: auto; border-top: 1px solid var(--border-soft); padding: 12px; }
 .stock-evidence-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: 9px; color: var(--text-secondary); font: 11px/1.45 var(--font-mono); overflow-wrap: anywhere; }
 .stock-evidence-row b { color: var(--text-primary); }
+.stock-provenance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 10px; }
+.stock-provenance-grid article { border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: 9px; min-width: 0; }
+.stock-provenance-grid p, .stock-provenance-grid pre, .stock-provenance { color: var(--text-secondary); font: 11px/1.45 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
 @media (max-width: 900px) {
   .table-row { grid-template-columns: 1fr 1fr; }
   .stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

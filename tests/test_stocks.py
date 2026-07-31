@@ -67,6 +67,28 @@ def test_review_rejects_invalid_json_and_over_budget(monkeypatch):
     assert "200000-byte" in response.json()["error"]
 
 
+def test_review_accepts_199999_bytes_but_rejects_exact_budget(monkeypatch):
+    overhead = len(json.dumps({"padding": ""}).encode("utf-8"))
+    valid_body = json.dumps({"padding": "x" * (199999 - overhead)}).encode("utf-8")
+    assert len(valid_body) == 199999
+    monkeypatch.setattr(stocks, "urlopen", lambda *_args, **_kwargs: FakeResponse(valid_body))
+    response = TestClient(app).get("/api/stocks/review?run_id=r&from_date=f&to_date=t&ticker=AAPL")
+    assert response.status_code == 200
+
+    exact_body = json.dumps({"padding": "x" * (200000 - overhead)}).encode("utf-8")
+    assert len(exact_body) == 200000
+    monkeypatch.setattr(stocks, "urlopen", lambda *_args, **_kwargs: FakeResponse(exact_body))
+    response = TestClient(app).get("/api/stocks/review?run_id=r&from_date=f&to_date=t&ticker=AAPL")
+    assert response.status_code == 502
+
+
 def test_review_requires_all_identity_fields():
     response = TestClient(app).get("/api/stocks/review?ticker=AAPL")
     assert response.status_code == 422
+
+
+def test_review_rejects_unsupported_upstream_status(monkeypatch):
+    monkeypatch.setattr(stocks, "urlopen", lambda *_args, **_kwargs: FakeResponse(b'{"error":"no"}', 500))
+    response = TestClient(app).get("/api/stocks/review?run_id=r&from_date=f&to_date=t&ticker=AAPL")
+    assert response.status_code == 502
+    assert "unsupported upstream status" in response.json()["error"]
