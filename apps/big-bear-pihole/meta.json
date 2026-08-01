@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:19:52.856509Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-pihole",
+  "appdata_path": "/srv/appdata/big-bear-pihole",
   "appdata_size_bytes": 17561027,
   "appdata_source": "/DATA/AppData/big-bear-pihole",
   "appdata_status": "copied",
@@ -15,14 +15,14 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-pihole/etc",
+      "path": "/srv/appdata/big-bear-pihole/etc",
       "size_bytes": 17561027,
       "source": "/DATA/AppData/big-bear-pihole/etc",
       "status": "copied"
     },
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-pihole/dnsmasq.d",
+      "path": "/srv/appdata/big-bear-pihole/dnsmasq.d",
       "size_bytes": 0,
       "source": "/DATA/AppData/big-bear-pihole/dnsmasq.d",
       "status": "copied"

@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:20:17.622632Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/prowlarr/config",
+  "appdata_path": "/srv/appdata/media-stack/prowlarr/config",
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/prowlarr",
   "appdata_status": "missing",
@@ -15,7 +15,7 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/prowlarr/config",
+      "path": "/srv/appdata/media-stack/prowlarr/config",
       "size_bytes": 168367548,
       "source": "/DATA/AppData/media-stack/prowlarr/config",
       "status": "copied"

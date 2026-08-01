@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:19:54.889510Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-syncthing",
+  "appdata_path": "/srv/appdata/big-bear-syncthing",
   "appdata_size_bytes": 148974415,
   "appdata_source": "/DATA/AppData/big-bear-syncthing",
   "appdata_status": "copied",
@@ -15,7 +15,7 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-syncthing/data",
+      "path": "/srv/appdata/big-bear-syncthing/data",
       "size_bytes": 148974415,
       "source": "/DATA/AppData/big-bear-syncthing/data",
       "status": "copied"

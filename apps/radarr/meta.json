@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:20:22.288907Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/radarr/config",
+  "appdata_path": "/srv/appdata/media-stack/radarr/config",
   "appdata_size_bytes": null,
   "appdata_source": "/DATA/AppData/radarr",
   "appdata_status": "missing",
@@ -15,14 +15,14 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/radarr/config",
+      "path": "/srv/appdata/media-stack/radarr/config",
       "size_bytes": 640454827,
       "source": "/DATA/AppData/media-stack/radarr/config",
       "status": "copied"
     },
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/media-stack/blackhole",
+      "path": "/srv/appdata/media-stack/blackhole",
       "size_bytes": 12777492,
       "source": "/DATA/AppData/media-stack/blackhole",
       "status": "copied"

@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:19:54.504359Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr",
+  "appdata_path": "/srv/appdata/big-bear-seerr",
   "appdata_size_bytes": 7643983,
   "appdata_source": "/DATA/AppData/big-bear-seerr",
   "appdata_status": "copied",
@@ -15,7 +15,7 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-seerr/config",
+      "path": "/srv/appdata/big-bear-seerr/config",
       "size_bytes": 7643983,
       "source": "/DATA/AppData/big-bear-seerr/config",
       "status": "copied"
