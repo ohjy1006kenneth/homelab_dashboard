@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:19:53.920841Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-portainer",
+  "appdata_path": "/srv/appdata/big-bear-portainer",
   "appdata_size_bytes": 657138,
   "appdata_source": "/DATA/AppData/big-bear-portainer",
   "appdata_status": "copied",
@@ -15,7 +15,7 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-portainer/data",
+      "path": "/srv/appdata/big-bear-portainer/data",
       "size_bytes": 657138,
       "source": "/DATA/AppData/big-bear-portainer/data",
       "status": "copied"

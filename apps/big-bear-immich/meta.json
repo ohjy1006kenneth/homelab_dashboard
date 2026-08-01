@@ -1,6 +1,6 @@
 {
   "added_at": "2026-05-31T13:19:51.706609Z",
-  "appdata_path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich",
+  "appdata_path": "/srv/appdata/big-bear-immich",
   "appdata_size_bytes": 1175687803,
   "appdata_source": "/DATA/AppData/big-bear-immich",
   "appdata_status": "copied",
@@ -15,14 +15,14 @@
   "volume_appdata": [
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich/pgdata",
+      "path": "/srv/appdata/big-bear-immich/pgdata",
       "size_bytes": 303234571,
       "source": "/DATA/AppData/big-bear-immich/pgdata",
       "status": "copied"
     },
     {
       "copied": true,
-      "path": "/home/juyoungoh/nas/Projects/dashboard/appdata/big-bear-immich/model-cache",
+      "path": "/srv/appdata/big-bear-immich/model-cache",
       "size_bytes": 823603647,
       "source": "/DATA/AppData/big-bear-immich/model-cache",
       "status": "copied"
