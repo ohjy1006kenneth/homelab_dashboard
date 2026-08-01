@@ -23,6 +23,22 @@ contains no secret values.
 
 ## Safe migration
 
+### Reproducible test setup
+
+From a clean checkout, install `uv` in a temporary bootstrap environment, then
+create the project environment and install production plus test dependencies:
+
+```sh
+python3 -m venv /tmp/dashboard-uv-bootstrap
+/tmp/dashboard-uv-bootstrap/bin/pip install uv
+/tmp/dashboard-uv-bootstrap/bin/uv venv .venv
+/tmp/dashboard-uv-bootstrap/bin/uv pip install --python .venv/bin/python -r requirements-dev.txt
+.venv/bin/python -m pytest tests/test_storage_layout.py tests/test_storage_contract_revision.py -q
+```
+
+The migration tests use temporary fixture paths only; they do not mount storage
+or invoke live services.
+
 1. Provision the protected `DASHBOARD_STORAGE_UUID` environment contract (for
    example in `/etc/lab-dashboard/storage.env`, mode `0640`, readable by the
    service account) with the UUID obtained from `blkid`. Do not guess a UUID.
