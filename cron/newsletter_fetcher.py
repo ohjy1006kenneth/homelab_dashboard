@@ -7,9 +7,11 @@ from pathlib import Path
 
 import feedparser
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
+from backend.paths import PATHS
+
+PROJECT_DIR = PATHS.root
 CONFIG = PROJECT_DIR / "dashboard.config.json"
-OUT = PROJECT_DIR / "data" / "newsletter_fetcher_last.json"
+OUT = PATHS.state / "newsletter_fetcher_last.json"
 
 
 def main() -> int:

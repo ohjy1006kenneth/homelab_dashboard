@@ -7,9 +7,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from backend.database import PROJECT_DIR
+from backend.paths import PATHS
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
+CONFIG_PATH = PATHS.config
 DEFAULT_STOCKS = ["NASDAQ:NVDA", "NASDAQ:AMD", "NYSE:TSM", "NASDAQ:ASML", "AMEX:SPY", "NASDAQ:QQQ", "BINANCE:BTCUSDT", "BINANCE:ETHUSDT"]
 
 

@@ -9,6 +9,8 @@ from typing import Iterator
 
 import psutil
 from fastapi import APIRouter
+
+from backend.paths import PATHS
 from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
@@ -79,7 +81,7 @@ def current_metrics() -> dict:
         "disk_used_gb": round(root_disk.used / 1024**3, 2),
         "disk_total_gb": round(root_disk.total / 1024**3, 2),
         "disk_pct": round((root_disk.used / root_disk.total) * 100, 1) if root_disk.total else 0,
-        "mounts": [_disk_usage("/"), _disk_usage("/home/juyoungoh/nas")],
+        "mounts": [_disk_usage("/"), _disk_usage(str(PATHS.nas))],
         "cpu_temp_c": _cpu_temp_c(),
         "uptime_hours": round((time.time() - BOOT_TIME) / 3600, 1),
         "network": {

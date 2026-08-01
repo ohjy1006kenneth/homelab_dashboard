@@ -17,11 +17,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from backend.database import PROJECT_DIR
+from backend.paths import PATHS
 from backend.routers import apps as apps_router
 from backend.routers.metrics import current_metrics
 
 router = APIRouter(prefix="/api/overview", tags=["overview"])
-CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
+CONFIG_PATH = PATHS.config
 GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 GOOGLE_OAUTH_STATE_TTL_SECONDS = 10 * 60
 WEATHER_FRESH_TTL_SECONDS = 10 * 60

@@ -10,9 +10,10 @@ import feedparser
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.database import PROJECT_DIR, get_connection
+from backend.paths import PATHS
 
 router = APIRouter(prefix="/api/newsletters", tags=["newsletters"])
-CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
+CONFIG_PATH = PATHS.config
 
 
 def _ensure_table() -> None:
