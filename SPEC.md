@@ -21,12 +21,12 @@ CasaOS filesystem                     Dashboard
 ─────────────────                     ─────────
 /var/lib/casaos/apps/
   jellyfin/
-    docker-compose.yml   ──────────►  /home/juyoungoh/nas/Projects/dashboard/apps/jellyfin/
+    docker-compose.yml   ──────────►  /opt/lab-dashboard/apps/jellyfin/
     icon.png             ──────────►    docker-compose.yml  (owned by dashboard)
                                         icon.png
                                         meta.json           (parsed from x-casaos fields)
 
-  nextcloud/             ──────────►  /home/juyoungoh/nas/Projects/dashboard/apps/nextcloud/
+  nextcloud/             ──────────►  /opt/lab-dashboard/apps/nextcloud/
     docker-compose.yml                  docker-compose.yml
     ...                                 icon.png
                                         meta.json
@@ -36,7 +36,7 @@ CasaOS filesystem                     Dashboard
 ```
 
 The migration script (`scripts/migrate_from_casaos.py`) runs **once**. After it completes:
-- Dashboard reads from `/home/juyoungoh/nas/Projects/dashboard/apps/` and SQLite only
+- Dashboard reads from `/opt/lab-dashboard/apps/` and SQLite only
 - Docker containers are managed via Docker SDK + `docker compose` CLI
 - CasaOS is no longer needed for anything
 
@@ -45,7 +45,7 @@ The migration script (`scripts/migrate_from_casaos.py`) runs **once**. After it 
 ## 3. Project Structure
 
 ```
-/home/juyoungoh/nas/Projects/dashboard/
+/opt/lab-dashboard/
 ├── backend/
 │   ├── main.py
 │   ├── database.py
@@ -142,7 +142,7 @@ Algorithm:
       - app title / description / author / category
       - port descriptions (to find web UI port)
       - icon field (may be a URL or local path)
-   c. Copy docker-compose.yml → /home/juyoungoh/nas/Projects/dashboard/apps/{app_id}/docker-compose.yml
+   c. Copy docker-compose.yml → /opt/lab-dashboard/apps/{app_id}/docker-compose.yml
    d. Resolve icon:
       - If /var/lib/casaos/apps/{app_id}/icon.png exists → copy it
       - Else if x-casaos has icon URL → download it
@@ -159,12 +159,12 @@ Algorithm:
    "Skipped 0 apps"
    "Icons found: 10/12"
 
-5. Write migration_report.json to /home/juyoungoh/nas/Projects/dashboard/data/
+5. Write migration_report.json to /opt/lab-dashboard/data/
 ```
 
 **Run it as:**
 ```bash
-sudo python3 /home/juyoungoh/nas/Projects/dashboard/scripts/migrate_from_casaos.py
+sudo python3 /opt/lab-dashboard/scripts/migrate_from_casaos.py
 ```
 
 Requires sudo because `/var/lib/casaos/apps/` is root-owned.
@@ -314,7 +314,7 @@ POST /api/newsletters/fetch       → trigger manual RSS fetch + summarize
     {
       "id": "newsletter-agent",
       "name": "Newsletter Fetcher",
-      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/newsletter_fetcher.py",
+      "script": "/opt/lab-dashboard/cron/newsletter_fetcher.py",
       "schedule": "0 8 * * *",
       "description": "Fetches and summarizes RSS newsletters"
     }
@@ -942,8 +942,8 @@ This keeps all the parsing logic in one testable place. Routers just call these 
 ## 13. Hermes System Prompt
 
 ```
-You are a web developer maintaining a homelab dashboard at /home/juyoungoh/nas/Projects/dashboard/.
-The spec is at /home/juyoungoh/nas/Projects/dashboard/SPEC.md — read it before any task.
+You are a web developer maintaining a homelab dashboard at /opt/lab-dashboard/.
+The spec is at /opt/lab-dashboard/SPEC.md — read it before any task.
 
 Rules:
 1. Read existing files before modifying them.
@@ -954,7 +954,7 @@ Rules:
 6. Every new widget follows the widget contract in SPEC.md §12. Never add widget logic to app.js.
 7. CSS tokens in style.css :root — never hardcode colors or sizes.
 8. All numbers use font-family: var(--font-mono).
-9. App data comes from /home/juyoungoh/nas/Projects/dashboard/apps/ and SQLite — never from CasaOS API.
+9. App data comes from /opt/lab-dashboard/apps/ and SQLite — never from CasaOS API.
 10. Backend first, test it, then build frontend.
 11. Layout is always saved via PUT /api/layout/{page_id} on every Gridstack change event.
 12. Features are not final — build for extension, not completion.
@@ -965,10 +965,10 @@ Rules:
 ## 14. Build Order
 
 **Phase 0 — Migration (do this first, while CasaOS is still running)**
-> "Build scripts/migrate_from_casaos.py per SPEC.md §5. Run it with sudo. Show me the migration report. Do not proceed until at least one app appears in /home/juyoungoh/nas/Projects/dashboard/apps/."
+> "Build scripts/migrate_from_casaos.py per SPEC.md §5. Run it with sudo. Show me the migration report. Do not proceed until at least one app appears in /opt/lab-dashboard/apps/."
 
 **Phase 1 — Foundation**
-> "Set up /home/juyoungoh/nas/Projects/dashboard/ per the directory structure in SPEC.md. Install deps from requirements.txt. Create the systemd service on port 8081. Verify http_check passes."
+> "Set up /opt/lab-dashboard/ per the directory structure in SPEC.md. Install deps from requirements.txt. Create the systemd service on port 8081. Verify http_check passes."
 
 **Phase 2 — Backend**
 > "Build all routers: metrics (with SSE stream), apps (Docker SDK + local compose files), agents, newsletters, layout (GET/PUT per page), pages (CRUD). Add Page and PageLayout models to models.py. Seed default pages and layouts on first run. Return mock data where real sources aren't ready. Confirm GET /api/apps, GET /api/metrics, and GET /api/layout/overview all return valid JSON."

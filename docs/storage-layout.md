@@ -78,7 +78,7 @@ or invoke live services.
    Never sync the legacy `/DATA/nas/Projects` mapping; the retained Projects
    folder remains disabled and has no `/srv/storage` destination.
 
-4. Verify the sibling backup directory `/var/lib/lab-dashboard-migration-backups/<UTC timestamp>/`, inspect Compose bind paths, and run the focused/full tests before enabling the production service.
+5. Verify the sibling backup directory `/var/lib/lab-dashboard-migration-backups/<UTC timestamp>/`, inspect Compose bind paths, and run the focused/full tests before enabling the production service.
 
 Rollback is non-destructive: stop the service, restore the desired destination
 from the timestamped backup with rsync, point the service variables back to the

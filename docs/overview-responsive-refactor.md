@@ -2,7 +2,7 @@
 
 Status: approved implementation specification
 
-Repository: `/home/juyoungoh/nas/Projects/dashboard`
+Repository: `/opt/lab-dashboard`
 
 Baseline: pushed `main` / `origin/main` commit `83e280a`
 
@@ -262,7 +262,7 @@ These are non-blocking unless the refactor makes them worse. Do not expand into 
 
 ### 8.1 Exact repository checks
 
-Run from `/home/juyoungoh/nas/Projects/dashboard`:
+Run from `/opt/lab-dashboard`:
 
 ```bash
 git status --short --branch
