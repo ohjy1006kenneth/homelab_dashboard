@@ -102,17 +102,76 @@ def _compose_source(app_dir: Path) -> Path | None:
     return next((app_dir / name for name in COMPOSE_NAMES if (app_dir / name).is_file()), None)
 
 
+_DASHBOARD_LEGACY_ROOTS = (
+    "/DATA/nas/Projects/dashboard",
+    "/home/juyoungoh/nas/Projects/dashboard",
+)
+_NAS_LEGACY_ROOTS = ("/DATA/nas", "/home/juyoungoh/nas")
+
+
+def _rewrite_legacy_host_path(value: str, source: Path) -> str:
+    """Map only approved legacy host bind roots, refusing unsafe stale paths."""
+    for root in _DASHBOARD_LEGACY_ROOTS:
+        if value == root or value.startswith(root + "/"):
+            suffix = value[len(root):].lstrip("/")
+            if suffix == "appdata" or suffix.startswith("appdata/"):
+                return "/srv/appdata" + ("/" + suffix[len("appdata/"):] if "/" in suffix else "")
+            raise ValueError(f"unmappable legacy dashboard bind in {source}: {value}")
+    if value == "/DATA/nas/Projects" or value.startswith("/DATA/nas/Projects/"):
+        raise ValueError(f"unmappable legacy Projects bind in {source}: {value}")
+    if value == "/home/juyoungoh/nas/Projects" or value.startswith("/home/juyoungoh/nas/Projects/"):
+        raise ValueError(f"unmappable legacy Projects bind in {source}: {value}")
+    for root in _NAS_LEGACY_ROOTS:
+        if value == root or value.startswith(root + "/"):
+            suffix = value[len(root):].lstrip("/")
+            if suffix.startswith("AppData/"):
+                return "/srv/appdata/" + suffix[len("AppData/"):]
+            return "/srv/storage/nas/" + suffix
+    if value.startswith("/DATA/AppData/"):
+        return "/srv/appdata/" + value[len("/DATA/AppData/"):]
+    return value
+
+
+def _rewrite_compose_volumes(data: dict, source: Path) -> dict:
+    """Rewrite Compose volume host sources without touching container values."""
+    for service in (data.get("services") or {}).values():
+        if not isinstance(service, dict):
+            continue
+        volumes = service.get("volumes") or []
+        rewritten = []
+        for volume in volumes:
+            if isinstance(volume, dict):
+                item = dict(volume)
+                host = item.get("source")
+                if isinstance(host, str):
+                    item["source"] = _rewrite_legacy_host_path(host, source)
+                rewritten.append(item)
+                continue
+            if not isinstance(volume, str):
+                rewritten.append(volume)
+                continue
+            parts = volume.split(":")
+            if len(parts) >= 2 and parts[0].startswith(("/", "~")):
+                parts[0] = _rewrite_legacy_host_path(parts[0], source)
+                rewritten.append(":".join(parts))
+            else:
+                rewritten.append(volume)
+        service["volumes"] = rewritten
+    return data
+
+
 def _canonicalize_compose(source: Path, destination: Path, operations: list[str], dry_run: bool) -> None:
     """Copy a Compose definition to the sole managed filename, compose.yaml."""
     operations.append(f"transform {source} -> {destination}")
-    if dry_run:
-        return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    # Parsing validates the transform while retaining comments/format in the source is not required.
+    # Parse and validate even for dry-runs so unsafe legacy binds fail closed.
     import yaml
     data = yaml.safe_load(source.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or not isinstance(data.get("services"), dict):
         raise ValueError(f"invalid Compose definition: {source}")
+    data = _rewrite_compose_volumes(data, source)
+    if dry_run:
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
@@ -156,8 +215,22 @@ def _migrate_syncthing_config(source: Path, destination: Path, operations: list[
     tree = ET.parse(source)
     root = tree.getroot()
     folders = root.findall("./folder")
-    university = [f for f in folders if f.get("path") in {"/DATA/nas/University", "/srv/storage/nas/University"}]
-    projects = [f for f in folders if f.get("path") in {"/DATA/nas/Projects", "/srv/storage/nas/Projects"}]
+    university = [f for f in folders if f.get("path") in {
+        "/DATA/nas/University", "/home/juyoungoh/nas/University", "/srv/storage/nas/University"
+    }]
+    projects = [f for f in folders if f.get("path") in {
+        "/DATA/nas/Projects", "/home/juyoungoh/nas/Projects", "/srv/storage/nas/Projects"
+    }]
+    recognized = {folder.get("path") for folder in university + projects}
+    unknown_legacy = []
+    for folder in folders:
+        path = folder.get("path")
+        if isinstance(path, str) and (
+            path.startswith("/DATA/nas/") or path.startswith("/home/juyoungoh/nas/")
+        ) and path not in recognized:
+            unknown_legacy.append(path)
+    if unknown_legacy:
+        raise ValueError(f"unknown legacy Syncthing folder mapping: {unknown_legacy[0]}")
     if len(university) > 1 or len(projects) > 1:
         raise ValueError("ambiguous Syncthing University or Projects folder mapping")
     if not university and not projects:
@@ -169,6 +242,15 @@ def _migrate_syncthing_config(source: Path, destination: Path, operations: list[
     if not dry_run:
         destination.parent.mkdir(parents=True, exist_ok=True)
         tree.write(destination, encoding="utf-8", xml_declaration=True)
+
+
+def _syncthing_config_source(source: Path) -> Path | None:
+    candidates = (
+        source / "appdata" / "big-bear-syncthing" / "config" / "config.xml",
+        source / "appdata" / "big-bear-syncthing" / "config.xml",
+        source / "appdata" / "big-bear-syncthing" / "data" / "config.xml",
+    )
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
 def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, storage: Path,
@@ -210,6 +292,15 @@ def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, sto
                 _rsync(old, new, dry_run, operations)
         for old, new in compose_sources:
             _canonicalize_compose(old, new, operations, dry_run)
+        syncthing_source = _syncthing_config_source(source)
+        if syncthing_source:
+            relative = syncthing_source.relative_to(source / "appdata")
+            _migrate_syncthing_config(
+                syncthing_source,
+                appdata / relative,
+                operations,
+                dry_run,
+            )
         source_db = source / "data" / "dashboard.db"
         if source_db.exists():
             _transform_database(source_db, state / "dashboard.db", stacks, operations, dry_run)
