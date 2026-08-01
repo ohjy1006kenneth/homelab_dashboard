@@ -8,6 +8,7 @@ those backups when a migration step fails.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -73,15 +74,37 @@ def _copy_tree(source: Path, destination: Path, dry_run: bool, operations: list[
         shutil.copy2(source, destination)
 
 
-def _backup_destination(destination: Path, backup_root: Path, dry_run: bool, operations: list[str]) -> Path | None:
+def _backup_destination(destination: Path, backup_root: Path, backup_identity: str,
+                        dry_run: bool, operations: list[str]) -> Path | None:
     if not destination.exists():
         operations.append(f"destination backup {destination} -> none (destination absent)")
         return None
-    backup = backup_root / destination.name
+    backup = backup_root / backup_identity
     operations.append(f"destination backup {destination} -> {backup}")
     if not dry_run:
         _copy_tree(destination, backup, False, [])
     return backup
+
+
+def _backup_identity(destination: Path, index: int) -> str:
+    """Return a unique, stable backup name for the complete destination identity."""
+    digest = hashlib.sha256(str(destination.resolve()).encode("utf-8")).hexdigest()[:16]
+    return f"destination-{index:02d}-{digest}"
+
+
+def _write_backup_manifest(backup_root: Path, backups: dict[Path, Path | None], dry_run: bool) -> None:
+    """Persist canonical destination-to-backup pairs before any destination changes."""
+    if dry_run:
+        return
+    backup_root.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "destinations": [
+            {"destination": str(destination.resolve()),
+             "backup": str(backup.resolve()) if backup is not None else None}
+            for destination, backup in backups.items()
+        ]
+    }
+    (backup_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def _restore_destination(destination: Path, backup: Path | None) -> None:
@@ -280,8 +303,10 @@ def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, sto
     stopped = False
     restart_error: Exception | None = None
     try:
-        for destination in unique_destinations:
-            backups[destination] = _backup_destination(destination, backup_root, dry_run, operations)
+        for index, destination in enumerate(unique_destinations):
+            identity = _backup_identity(destination, index)
+            backups[destination] = _backup_destination(destination, backup_root, identity, dry_run, operations)
+        _write_backup_manifest(backup_root, backups, dry_run)
         if service_unit and unique_destinations:
             operations.append(f"systemctl stop {service_unit}")
             if not dry_run:

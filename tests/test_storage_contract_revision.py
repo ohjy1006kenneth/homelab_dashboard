@@ -4,9 +4,11 @@ import sqlite3
 import xml.etree.ElementTree as ET
 import pytest
 import yaml
+from fastapi import HTTPException
 
 from scripts.migrate_storage_layout import _canonicalize_compose, _migrate_syncthing_config, run_migration
 from backend.storage import compose_requires_storage
+from backend.routers import apps
 
 
 def test_compose_transform_and_database_paths(tmp_path):
@@ -53,6 +55,22 @@ def test_syncthing_mapping_preserves_identity_and_disables_projects(tmp_path):
 def test_storage_bind_detection_is_scoped():
     assert compose_requires_storage({"services": {"x": {"volumes": ["/srv/storage/nas/University:/data"]}}})
     assert not compose_requires_storage({"services": {"x": {"volumes": ["/srv/appdata/x:/data"]}}})
+
+
+@pytest.mark.parametrize("uuid", [None, "mismatched-uuid"])
+def test_storage_dependent_api_refuses_before_docker(tmp_path, monkeypatch, uuid):
+    compose_path = tmp_path / "compose.yaml"
+    compose_path.write_text("services:\n  app:\n    volumes: ['/srv/storage/nas:/data']\n", encoding="utf-8")
+    monkeypatch.setattr(apps, "_app_row", lambda _app_id: {"compose_path": str(compose_path), "web_ui_port": None})
+    monkeypatch.setattr("backend.storage.storage_mount_is_safe", lambda: False)
+    docker_calls = []
+    monkeypatch.setattr(apps.subprocess, "run", lambda *args, **kwargs: docker_calls.append(args) or None)
+
+    with pytest.raises(HTTPException) as error:
+        apps._run_compose("demo", ["up"])
+
+    assert error.value.status_code == 503
+    assert docker_calls == []
 
 
 def test_compose_rewrites_short_long_and_preserves_non_host_values(tmp_path):
