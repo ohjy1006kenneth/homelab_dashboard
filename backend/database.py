@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 from typing import Iterable
 
-PROJECT_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_DIR / "data"
-DB_PATH = DATA_DIR / "dashboard.db"
+from backend.paths import DATA_DIR, DB_PATH, PROJECT_DIR
 
 
 def get_connection() -> sqlite3.Connection:

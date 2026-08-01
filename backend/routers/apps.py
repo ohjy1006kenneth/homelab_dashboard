@@ -16,9 +16,11 @@ from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, RedirectResponse
 
 from backend.database import DATA_DIR, PROJECT_DIR, get_connection
+from backend.paths import APPS_DIR as SOURCE_APPS_DIR, STACKS_DIR
+from backend.storage import StorageSafetyError, require_safe_storage
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
-APPS_DIR = PROJECT_DIR / "apps"
+APPS_DIR = STACKS_DIR
 BACKUP_DIR = DATA_DIR / "compose_backups"
 
 
@@ -276,7 +278,7 @@ def create_app(payload: AppCreate, request: Request) -> dict:
     if any(item["conflict"] for item in conflicts):
         raise HTTPException(status_code=409, detail={"message": "Port conflicts detected", "ports": conflicts})
     app_dir.mkdir(parents=True, exist_ok=False)
-    compose_path = app_dir / "docker-compose.yml"
+    compose_path = app_dir / "compose.yaml"
     meta_path = app_dir / "meta.json"
     web_path = _web_ui_path(payload.web_ui_path)
     compose_path.write_text(payload.compose.rstrip() + "\n", encoding="utf-8")
@@ -337,7 +339,7 @@ def open_app(app_id: str, request: Request) -> RedirectResponse:
 
 @router.get("/{app_id}/icon")
 def get_icon(app_id: str) -> FileResponse:
-    icon = APPS_DIR / app_id / "icon.png"
+    icon = SOURCE_APPS_DIR / app_id / "icon.png"
     if not icon.exists():
         raise HTTPException(status_code=404, detail="Icon not found")
     return FileResponse(icon)
@@ -425,6 +427,12 @@ def _run_compose(app_id: str, args: list[str]) -> dict[str, str | bool | list[di
     compose_path = row["compose_path"]
     if not compose_path or not Path(compose_path).exists():
         raise HTTPException(status_code=404, detail="Compose file not found")
+    if args and args[0] in {"up", "restart"}:
+        compose = _read_compose(compose_path)
+        try:
+            require_safe_storage(compose)
+        except StorageSafetyError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     if args and args[0] == "up":
         compose = _read_compose(compose_path)
         action_ports: list[int] = []
@@ -504,7 +512,7 @@ def archive_app(app_id: str) -> dict[str, str | bool]:
     _backup_compose(app_id, path, "pre-archive")
     archive_dir = path.parent / "archived"
     archive_dir.mkdir(exist_ok=True)
-    archived_path = archive_dir / f"docker-compose.{_utc_stamp()}.yml"
+    archived_path = archive_dir / f"compose.{_utc_stamp()}.yaml"
     shutil.move(str(path), archived_path)
     with get_connection() as conn:
         conn.execute("UPDATE app SET enabled = 0 WHERE id = ?", (app_id,))

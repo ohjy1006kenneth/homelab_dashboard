@@ -1,16 +1,26 @@
 [Unit]
 Description=lab.local Homelab Dashboard (user service)
-Documentation=file:%h/nas/Projects/dashboard/SPEC.md
-After=network-online.target
+Documentation=file:/opt/lab-dashboard/SPEC.md
+After=network-online.target srv-storage.mount
 Wants=network-online.target
+RequiresMountsFor=/srv/storage
 
 [Service]
 Type=simple
-WorkingDirectory=%h/nas/Projects/dashboard
+WorkingDirectory=/opt/lab-dashboard
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/lab-dashboard/storage.env
+Environment=DASHBOARD_ROOT=/opt/lab-dashboard
+Environment=DASHBOARD_STATE_DIR=/var/lib/lab-dashboard
+Environment=DASHBOARD_STACKS_DIR=/srv/docker/stacks
+Environment=DASHBOARD_APPDATA_DIR=/srv/appdata
+Environment=DASHBOARD_NAS_DIR=/srv/storage/nas
+# Provision once as root for the unprivileged user-service mode:
+# install -d -o juyoungoh -g juyoungoh -m 0750 /var/lib/lab-dashboard
+# The user manager must not be allowed to create this state directory implicitly.
 # The user systemd manager may not include newly-added supplementary groups until logout/reboot.
 # Run under the docker primary group so app status/logs/stats can access /var/run/docker.sock.
-ExecStart=/usr/bin/sg docker -c 'exec %h/nas/Projects/dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765'
+ExecStart=/usr/bin/sg docker -c 'exec /opt/lab-dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765'
 Restart=always
 RestartSec=5
 KillSignal=SIGINT

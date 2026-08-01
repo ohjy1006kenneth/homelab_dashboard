@@ -13,9 +13,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.database import DATA_DIR, PROJECT_DIR, get_connection
+from backend.paths import PATHS
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
-CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
+CONFIG_PATH = PATHS.config
 LOG_DIR = DATA_DIR / "agent_logs"
 RUNNING: dict[str, subprocess.Popen[str]] = {}
 RUN_LOGS: dict[str, Path] = {}

@@ -6,14 +6,14 @@
     {
       "id": "newsletter-agent",
       "name": "Newsletter Fetcher",
-      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/newsletter_fetcher.py",
+      "script": "/opt/lab-dashboard/cron/newsletter_fetcher.py",
       "schedule": "0 8 * * *",
       "description": "Fetches and summarizes RSS newsletters"
     },
     {
       "id": "news-summarizer-agent",
       "name": "News Summarizer Agent",
-      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/news_summarizer_agent.py",
+      "script": "/opt/lab-dashboard/cron/news_summarizer_agent.py",
       "schedule": "on demand after RSS fetch",
       "description": "Uses Hermes news-brief profile for summarization and dashcraft profile for curation/summarization"
     }

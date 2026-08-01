@@ -21,13 +21,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from backend.paths import from_environment
 
-CASAOS_APPS_DIR = Path("/var/lib/casaos/apps")
+_PATHS = from_environment()
+CASAOS_APPS_DIR = Path(os.environ.get("CASAOS_APPS_DIR", "/var/lib/casaos/apps"))
 CASAOS_APPDATA_DIR = Path("/DATA/AppData")
-PROJECT_DIR = Path("/home/juyoungoh/nas/Projects/dashboard")
+PROJECT_DIR = _PATHS.root
 DASHBOARD_APPS_DIR = PROJECT_DIR / "apps"
-DASHBOARD_APPDATA_DIR = PROJECT_DIR / "appdata"
-DATA_DIR = PROJECT_DIR / "data"
+STACKS_DIR = _PATHS.stacks
+DASHBOARD_APPDATA_DIR = _PATHS.appdata
+DATA_DIR = _PATHS.state
 DB_PATH = DATA_DIR / "dashboard.db"
 REPORT_PATH = DATA_DIR / "migration_report.json"
 
@@ -426,7 +429,8 @@ def migrate_app(app_dir: Path) -> dict[str, Any]:
     app_out_dir = DASHBOARD_APPS_DIR / app_id
     app_out_dir.mkdir(parents=True, exist_ok=True)
     support_files = copy_support_files(app_dir, app_out_dir)
-    compose_out = app_out_dir / "docker-compose.yml"
+    compose_out = STACKS_DIR / app_id / "compose.yaml"
+    compose_out.parent.mkdir(parents=True, exist_ok=True)
 
     resolved = get_resolved_compose(app_id)
     if resolved:

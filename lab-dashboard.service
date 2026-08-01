@@ -1,17 +1,25 @@
 [Unit]
 Description=lab.local Homelab Dashboard
-After=network-online.target docker.service
+After=network-online.target docker.service srv-storage.mount
 Wants=network-online.target
 Requires=docker.service
+RequiresMountsFor=/srv/storage
 
 [Service]
 Type=simple
 User=juyoungoh
 Group=juyoungoh
+StateDirectory=lab-dashboard
 SupplementaryGroups=docker
-WorkingDirectory=/home/juyoungoh/nas/Projects/dashboard
+WorkingDirectory=/opt/lab-dashboard
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/juyoungoh/nas/Projects/dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765
+EnvironmentFile=-/etc/lab-dashboard/storage.env
+Environment=DASHBOARD_ROOT=/opt/lab-dashboard
+Environment=DASHBOARD_STATE_DIR=/var/lib/lab-dashboard
+Environment=DASHBOARD_STACKS_DIR=/srv/docker/stacks
+Environment=DASHBOARD_APPDATA_DIR=/srv/appdata
+Environment=DASHBOARD_NAS_DIR=/srv/storage/nas
+ExecStart=/opt/lab-dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765
 Restart=on-failure
 RestartSec=5
 
