@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import subprocess
@@ -84,6 +85,52 @@ def test_migration_dry_run_is_non_destructive_and_plans_backups(tmp_path):
     assert any("backup" in operation.lower() for operation in result.operations)
     assert (source / "data" / "dashboard.db").read_text(encoding="utf-8") == "db"
     assert not (tmp_path / "state").exists()
+
+
+def test_migration_manifest_records_exact_source_destination_and_backup_provenance(tmp_path):
+    source = tmp_path / "old"
+    storage = tmp_path / "storage"
+    (source / "data").mkdir(parents=True)
+    (source / "data" / "marker").write_text("source-data", encoding="utf-8")
+    (source / "appdata").mkdir()
+    (source / "appdata" / "marker").write_text("source-appdata", encoding="utf-8")
+    compose_source = source / "apps" / "demo" / "docker-compose.yml"
+    compose_source.parent.mkdir(parents=True)
+    compose_source.write_text("services:\n  demo:\n    image: alpine\n", encoding="utf-8")
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "existing").write_text("preexisting", encoding="utf-8")
+    storage.mkdir()
+
+    result = migrate_storage_layout.run_migration(
+        source=source, state=state, stacks=tmp_path / "stacks", appdata=tmp_path / "appdata",
+        storage=storage, mount_uuid="fixture", dry_run=False, mount_probe=lambda *_: True,
+    )
+
+    assert result.exit_code == 0
+    backup_operation = next(op for op in result.operations if "destination backup" in op)
+    backup_path = Path(backup_operation.split(" -> ")[-1])
+    manifest = json.loads((backup_path.parent / "manifest.json").read_text(encoding="utf-8"))
+    records = {Path(item["destination"]): item for item in manifest["destinations"]}
+    assert records[state] == {
+        "source": str((source / "data").resolve()),
+        "destination": str(state.resolve()),
+        "backup": str(backup_path.resolve()),
+    }
+    assert records[tmp_path / "appdata"] == {
+        "source": str((source / "appdata").resolve()),
+        "destination": str((tmp_path / "appdata").resolve()),
+        "backup": None,
+    }
+    compose_destination = tmp_path / "stacks" / "demo" / "compose.yaml"
+    assert records[compose_destination] == {
+        "source": str(compose_source.resolve()),
+        "destination": str(compose_destination.resolve()),
+        "backup": None,
+    }
+    assert (source / "data" / "marker").read_text(encoding="utf-8") == "source-data"
+    assert (source / "appdata" / "marker").read_text(encoding="utf-8") == "source-appdata"
+    assert compose_source.read_text(encoding="utf-8").startswith("services:")
 
 
 def test_migration_rolls_back_colliding_destination_basenames_exactly(tmp_path):
