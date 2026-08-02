@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.routers import agents, apps, metrics, newsletters, overview, settings, stocks
+from backend.routers import agents, apps, metrics, newsletters, overview, settings
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = PROJECT_DIR / "frontend"
@@ -27,7 +27,6 @@ app.include_router(agents.router)
 app.include_router(newsletters.router)
 app.include_router(overview.router)
 app.include_router(settings.router)
-app.include_router(stocks.router)
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
