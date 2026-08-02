@@ -108,17 +108,22 @@ def _new_backup_root(state: Path, dry_run: bool) -> Path:
         return candidate
 
 
-def _write_backup_manifest(backup_root: Path, backups: dict[Path, Path | None], dry_run: bool) -> None:
-    """Persist canonical destination-to-backup pairs before any destination changes."""
+def _write_backup_manifest(backup_root: Path, plans: list[tuple[Path, Path, Path]],
+                           backups: dict[Path, Path | None], dry_run: bool) -> None:
+    """Persist canonical source/destination mappings and their destination backups."""
     if dry_run:
         return
     backup_root.mkdir(parents=True, exist_ok=True)
+    destination_records = []
+    for source, destination, backup_destination in plans:
+        backup = backups[backup_destination]
+        destination_records.append({
+            "source": str(source.resolve()),
+            "destination": str(destination.resolve()),
+            "backup": str(backup.resolve()) if backup is not None else None,
+        })
     manifest = {
-        "destinations": [
-            {"destination": str(destination.resolve()),
-             "backup": str(backup.resolve()) if backup is not None else None}
-            for destination, backup in backups.items()
-        ]
+        "destinations": destination_records,
     }
     (backup_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
@@ -312,7 +317,9 @@ def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, sto
             compose = _compose_source(app_dir)
             if compose:
                 compose_sources.append((compose, stacks / app_dir.name / "compose.yaml"))
-    destination_paths = [new for _old, new in plans] + [new.parent for _old, new in compose_sources]
+    manifest_plans = ([(old, new, new) for old, new in plans]
+                      + [(old, new, new.parent) for old, new in compose_sources])
+    destination_paths = [backup_destination for _old, _new, backup_destination in manifest_plans]
     unique_destinations = list(dict.fromkeys(destination_paths))
     backups: dict[Path, Path | None] = {}
     stopped = False
@@ -321,7 +328,7 @@ def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, sto
         for index, destination in enumerate(unique_destinations):
             identity = _backup_identity(destination, index)
             backups[destination] = _backup_destination(destination, backup_root, identity, dry_run, operations)
-        _write_backup_manifest(backup_root, backups, dry_run)
+        _write_backup_manifest(backup_root, manifest_plans, backups, dry_run)
         if service_unit and unique_destinations:
             operations.append(f"systemctl stop {service_unit}")
             if not dry_run:
