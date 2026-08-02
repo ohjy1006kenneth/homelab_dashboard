@@ -29,6 +29,21 @@ def test_production_paths_are_explicit(monkeypatch):
     assert configured.db == Path("/var/lib/lab-dashboard/dashboard.db")
 
 
+def test_production_paths_do_not_depend_on_checkout_or_cwd(monkeypatch, tmp_path):
+    for name in ("DASHBOARD_ROOT", "DASHBOARD_STATE_DIR", "DASHBOARD_STACKS_DIR",
+                 "DASHBOARD_APPDATA_DIR", "DASHBOARD_NAS_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    configured = paths.from_environment()
+
+    assert configured.root == Path("/opt/lab-dashboard")
+    assert configured.state == Path("/var/lib/lab-dashboard")
+    assert configured.stacks == Path("/srv/docker/stacks")
+    assert configured.appdata == Path("/srv/appdata")
+    assert configured.nas == Path("/srv/storage/nas")
+
+
 def test_migration_dry_run_fails_closed_without_mount(tmp_path):
     result = migrate_storage_layout.run_migration(
         source=tmp_path / "old",
@@ -148,6 +163,32 @@ def test_migration_repeat_preserves_content_and_restarts_service(tmp_path):
     assert (tmp_path / "state" / "marker").read_text(encoding="utf-8") == "source"
     assert calls == [["systemctl", "stop", "lab-dashboard.service"], ["systemctl", "start", "lab-dashboard.service"],
                      ["systemctl", "stop", "lab-dashboard.service"], ["systemctl", "start", "lab-dashboard.service"]]
+
+
+def test_migration_backup_roots_are_unique_when_clock_is_fixed(tmp_path, monkeypatch):
+    source = tmp_path / "old"
+    (source / "data").mkdir(parents=True)
+    (source / "data" / "marker").write_text("source", encoding="utf-8")
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "existing").write_text("state", encoding="utf-8")
+    (tmp_path / "appdata").mkdir()
+    (tmp_path / "appdata" / "existing").write_text("appdata", encoding="utf-8")
+    monkeypatch.setattr(migrate_storage_layout, "_stamp", lambda: "fixed")
+
+    kwargs = dict(source=source, state=tmp_path / "state", stacks=tmp_path / "stacks",
+                  appdata=tmp_path / "appdata", storage=storage, mount_uuid="fixture",
+                  dry_run=False, mount_probe=lambda *_: True)
+    first = migrate_storage_layout.run_migration(**kwargs)
+    second = migrate_storage_layout.run_migration(**kwargs)
+
+    assert first.exit_code == second.exit_code == 0
+    first_roots = {op.split(" -> ")[-1].rsplit("/destination-", 1)[0]
+                   for op in first.operations if "destination backup" in op and "-> none" not in op}
+    second_roots = {op.split(" -> ")[-1].rsplit("/destination-", 1)[0]
+                    for op in second.operations if "destination backup" in op and "-> none" not in op}
+    assert first_roots.isdisjoint(second_roots)
 
 
 def test_migration_copy_failure_restores_partial_destinations_and_reports_restart_failure(tmp_path, monkeypatch):

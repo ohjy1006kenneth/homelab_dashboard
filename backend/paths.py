@@ -4,6 +4,12 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+PRODUCTION_ROOT = Path("/opt/lab-dashboard")
+PRODUCTION_STATE = Path("/var/lib/lab-dashboard")
+PRODUCTION_STACKS = Path("/srv/docker/stacks")
+PRODUCTION_APPDATA = Path("/srv/appdata")
+PRODUCTION_NAS = Path("/srv/storage/nas")
+
 
 @dataclass(frozen=True)
 class DashboardPaths:
@@ -29,14 +35,14 @@ class DashboardPaths:
 
 
 def from_environment() -> DashboardPaths:
-    root = Path(os.environ.get("DASHBOARD_ROOT", Path(__file__).resolve().parents[1]))
-    state = Path(os.environ.get("DASHBOARD_STATE_DIR", root / "data"))
+    root = Path(os.environ.get("DASHBOARD_ROOT", PRODUCTION_ROOT))
+    state = Path(os.environ.get("DASHBOARD_STATE_DIR", PRODUCTION_STATE))
     return DashboardPaths(
         root=root,
         state=state,
-        stacks=Path(os.environ.get("DASHBOARD_STACKS_DIR", root / "apps")),
-        appdata=Path(os.environ.get("DASHBOARD_APPDATA_DIR", root / "appdata")),
-        nas=Path(os.environ.get("DASHBOARD_NAS_DIR", "/srv/storage/nas")),
+        stacks=Path(os.environ.get("DASHBOARD_STACKS_DIR", PRODUCTION_STACKS)),
+        appdata=Path(os.environ.get("DASHBOARD_APPDATA_DIR", PRODUCTION_APPDATA)),
+        nas=Path(os.environ.get("DASHBOARD_NAS_DIR", PRODUCTION_NAS)),
     )
 
 

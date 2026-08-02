@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Migrate CasaOS app definitions into the lab.local dashboard.
 
-This script copies each CasaOS app compose file into this project, extracts the
-CasaOS metadata into apps/{app_id}/meta.json, downloads/copies icons when
-available, copies matching /DATA/AppData/{app_id} directories into local
-appdata/{app_id}, and upserts App rows into data/dashboard.db.
+The source tree is read-only input. Mutable dashboard outputs always resolve
+through ``backend.paths`` (production defaults are outside the checkout): app
+metadata is stored under ``/opt/lab-dashboard/apps``, Compose definitions under
+``/srv/docker/stacks``, app data under ``/srv/appdata``, and the database under
+``/var/lib/lab-dashboard``. Explicit ``DASHBOARD_*`` overrides remain available
+for isolated development and tests.
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.paths import from_environment
 
 _PATHS = from_environment()
@@ -200,7 +204,7 @@ def directory_size(path: Path) -> int:
 
 
 def copy_appdata(app_id: str) -> dict[str, Any]:
-    """Copy /DATA/AppData/{app_id} into project-local appdata/{app_id}."""
+    """Copy the legacy CasaOS app-data source into managed appdata."""
     appdata_in = CASAOS_APPDATA_DIR / app_id
     appdata_out = DASHBOARD_APPDATA_DIR / app_id
 
@@ -263,7 +267,7 @@ def copy_support_files(app_dir: Path, app_out_dir: Path) -> list[str]:
 
 
 def copy_path_to_appdata(source: Path) -> dict[str, Any]:
-    """Copy any /DATA/AppData path into project appdata preserving relative layout."""
+    """Copy a legacy CasaOS AppData path into managed appdata."""
     try:
         relative = source.resolve().relative_to(CASAOS_APPDATA_DIR)
     except ValueError:

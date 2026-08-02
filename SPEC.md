@@ -17,26 +17,25 @@
 ## 2. Migration Strategy (run once, then forget CasaOS)
 
 ```
-CasaOS filesystem                     Dashboard
+CasaOS filesystem (source only)       Dashboard (mutable destinations)
 ─────────────────                     ─────────
 /var/lib/casaos/apps/
   jellyfin/
-    docker-compose.yml   ──────────►  /opt/lab-dashboard/apps/jellyfin/
-    icon.png             ──────────►    docker-compose.yml  (owned by dashboard)
-                                        icon.png
+    docker-compose.yml   ──────────►  /srv/docker/stacks/jellyfin/compose.yaml
+    icon.png             ──────────►  /opt/lab-dashboard/apps/jellyfin/icon.png
                                         meta.json           (parsed from x-casaos fields)
 
-  nextcloud/             ──────────►  /opt/lab-dashboard/apps/nextcloud/
-    docker-compose.yml                  docker-compose.yml
-    ...                                 icon.png
-                                        meta.json
+  nextcloud/             ──────────►  /srv/docker/stacks/nextcloud/compose.yaml
+    docker-compose.yml                  /opt/lab-dashboard/apps/nextcloud/meta.json
+    ...
 
-                                      /data/dashboard.db
+                                      /var/lib/lab-dashboard/dashboard.db
                                         App table row per app
 ```
 
 The migration script (`scripts/migrate_from_casaos.py`) runs **once**. After it completes:
-- Dashboard reads from `/opt/lab-dashboard/apps/` and SQLite only
+- Dashboard reads app metadata from `/opt/lab-dashboard/apps/`, Compose from
+  `/srv/docker/stacks/`, and SQLite from `/var/lib/lab-dashboard/`.
 - Docker containers are managed via Docker SDK + `docker compose` CLI
 - CasaOS is no longer needed for anything
 
@@ -74,17 +73,14 @@ The migration script (`scripts/migrate_from_casaos.py`) runs **once**. After it 
 │       ├── quick-links.js
 │       └── clock.js
 │
-├── apps/                        ← owned by dashboard after migration
+├── apps/                        ← source metadata/icons after migration
 │   ├── jellyfin/
-│   │   ├── docker-compose.yml
-│   │   ├── icon.png
-│   │   └── meta.json
-│   ├── nextcloud/
-│   │   └── ...
-│   └── {app_name}/
-│       ├── docker-compose.yml   ← editable, dashboard is source of truth
-│       ├── icon.png             ← copied from CasaOS or fetched from Docker Hub
-│       └── meta.json            ← parsed metadata (see schema below)
+│   │   ├── icon.png             ← copied from CasaOS or fetched from Docker Hub
+│   │   └── meta.json            ← parsed metadata (see schema below)
+│   └── {app_name}/...
+│
+├── /srv/docker/stacks/{app}/compose.yaml  (managed Compose definitions)
+├── /srv/appdata/{app}/                    (managed app data)
 │
 ├── scripts/
 │   └── migrate_from_casaos.py   ← run once to import all CasaOS apps
@@ -92,8 +88,8 @@ The migration script (`scripts/migrate_from_casaos.py`) runs **once**. After it 
 ├── cron/
 │   └── newsletter_fetcher.py
 │
-├── data/
-│   └── dashboard.db
+├── /var/lib/lab-dashboard/dashboard.db
+├── /var/lib/lab-dashboard/migration_report.json
 │
 ├── dashboard.config.json
 ├── SPEC.md
@@ -142,7 +138,7 @@ Algorithm:
       - app title / description / author / category
       - port descriptions (to find web UI port)
       - icon field (may be a URL or local path)
-   c. Copy docker-compose.yml → /opt/lab-dashboard/apps/{app_id}/docker-compose.yml
+   c. Copy and canonicalize docker-compose.yml → /srv/docker/stacks/{app_id}/compose.yaml
    d. Resolve icon:
       - If /var/lib/casaos/apps/{app_id}/icon.png exists → copy it
       - Else if x-casaos has icon URL → download it
@@ -152,14 +148,14 @@ Algorithm:
 
 3. Also try: casaos-cli app-management show local {app_id} --yaml
    - Use this output if it differs (it includes resolved env vars)
-   - Saves as docker-compose.yml, overwriting the raw copy
+   - Saves as /srv/docker/stacks/{app_id}/compose.yaml, leaving the source untouched
 
 4. Print migration report:
    "Migrated 12 apps: jellyfin, nextcloud, ... "
    "Skipped 0 apps"
    "Icons found: 10/12"
 
-5. Write migration_report.json to /opt/lab-dashboard/data/
+5. Write migration_report.json to /var/lib/lab-dashboard/
 ```
 
 **Run it as:**
@@ -179,10 +175,10 @@ class App(SQLModel, table=True):
     name: str                  # display name e.g. "Jellyfin"
     description: str | None
     category: str | None
-    icon_path: str | None      # relative path to icon.png inside apps/{id}/
+    icon_path: str | None      # relative path to icon.png inside /opt/lab-dashboard/apps/{id}/
     web_ui_port: int | None    # port number for the web UI
     web_ui_path: str = "/"
-    compose_path: str          # absolute path to docker-compose.yml
+    compose_path: str          # absolute path to /srv/docker/stacks/{id}/compose.yaml
     enabled: bool = True
     added_at: datetime
     source: str = "casaos"     # "casaos" | "manual" | "import"

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import sqlite3
 import xml.etree.ElementTree as ET
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 import yaml
 from fastapi import HTTPException
 
 from scripts.migrate_storage_layout import _canonicalize_compose, _migrate_syncthing_config, run_migration
-from backend.storage import compose_requires_storage
+from backend.storage import compose_requires_storage, storage_mount_is_safe
 from backend.routers import apps
 
 
@@ -55,6 +60,29 @@ def test_syncthing_mapping_preserves_identity_and_disables_projects(tmp_path):
 def test_storage_bind_detection_is_scoped():
     assert compose_requires_storage({"services": {"x": {"volumes": ["/srv/storage/nas/University:/data"]}}})
     assert not compose_requires_storage({"services": {"x": {"volumes": ["/srv/appdata/x:/data"]}}})
+
+
+@pytest.mark.parametrize(
+    ("mount_rc", "findmnt_rc", "uuid", "expected"),
+    [(1, 0, "fixture", False), (0, 1, "fixture", False),
+     (0, 0, "fixture", True), (0, 0, "other", False)],
+)
+def test_storage_mount_probe_checks_mount_and_exact_uuid(
+    monkeypatch, tmp_path, mount_rc, findmnt_rc, uuid, expected
+):
+    calls = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        if command[0] == "mountpoint":
+            return subprocess.CompletedProcess(command, mount_rc)
+        return subprocess.CompletedProcess(command, findmnt_rc, stdout=f"{uuid}\n")
+
+    monkeypatch.setattr("backend.storage.subprocess.run", run)
+    assert storage_mount_is_safe(tmp_path / "storage", "fixture") is expected
+    assert calls and calls[0][0] == "mountpoint"
+    if mount_rc == 0:
+        assert calls[1][0] == "findmnt"
 
 
 @pytest.mark.parametrize("uuid", [None, "mismatched-uuid"])
@@ -110,6 +138,48 @@ def test_syncthing_rejects_unknown_legacy_mapping(tmp_path):
     source.write_text('<configuration><folder id="uni" path="/DATA/nas/University"/><folder id="other" path="/DATA/nas/Unreviewed"/></configuration>', encoding="utf-8")
     with pytest.raises(ValueError, match="unknown legacy Syncthing folder mapping"):
         _migrate_syncthing_config(source, tmp_path / "new.xml", [], True)
+
+
+def test_casaos_cli_uses_storage_contract_from_arbitrary_cwd(tmp_path):
+    casaos_apps = tmp_path / "casaos-apps" / "demo"
+    casaos_apps.mkdir(parents=True)
+    (casaos_apps / "docker-compose.yml").write_text(
+        "services:\n  demo:\n    image: alpine\n    ports: ['8080:80']\n",
+        encoding="utf-8",
+    )
+    root = tmp_path / "root"
+    state = tmp_path / "state"
+    stacks = tmp_path / "stacks"
+    appdata = tmp_path / "appdata"
+    env = os.environ.copy()
+    env.update({
+        "CASAOS_APPS_DIR": str(tmp_path / "casaos-apps"),
+        "DASHBOARD_ROOT": str(root),
+        "DASHBOARD_STATE_DIR": str(state),
+        "DASHBOARD_STACKS_DIR": str(stacks),
+        "DASHBOARD_APPDATA_DIR": str(appdata),
+    })
+    for name in ("DASHBOARD_NAS_DIR", "DASHBOARD_STORAGE_UUID"):
+        env.pop(name, None)
+
+    result = subprocess.run(
+        [sys.executable, str(_repo_root() / "scripts" / "migrate_from_casaos.py")],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (root / "apps" / "demo" / "meta.json").exists()
+    assert (stacks / "demo" / "compose.yaml").exists()
+    assert (state / "dashboard.db").exists()
+    assert not (tmp_path / "apps").exists()
+
+
+def _repo_root():
+    return Path(__file__).resolve().parents[1]
 
 
 def test_run_migration_executes_syncthing_and_dry_run_writes_nothing(tmp_path):
