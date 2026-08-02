@@ -15,6 +15,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,6 +91,21 @@ def _backup_identity(destination: Path, index: int) -> str:
     """Return a unique, stable backup name for the complete destination identity."""
     digest = hashlib.sha256(str(destination.resolve()).encode("utf-8")).hexdigest()[:16]
     return f"destination-{index:02d}-{digest}"
+
+
+def _new_backup_root(state: Path, dry_run: bool) -> Path:
+    """Allocate an exclusive per-invocation namespace for destination backups."""
+    parent = state.parent / "lab-dashboard-migration-backups"
+    stamp = _stamp()
+    while True:
+        candidate = parent / f"{stamp}-{uuid.uuid4().hex}"
+        if dry_run:
+            return candidate
+        try:
+            candidate.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return candidate
 
 
 def _write_backup_manifest(backup_root: Path, backups: dict[Path, Path | None], dry_run: bool) -> None:
@@ -285,10 +301,9 @@ def run_migration(*, source: Path, state: Path, stacks: Path, appdata: Path, sto
         return MigrationResult(2, f"Required storage mount {storage} is not mounted or UUID does not match", operations)
     if not source.exists():
         return MigrationResult(2, f"source does not exist: {source}", operations)
-    timestamp = _stamp()
     # Keep the backup tree outside the state destination being backed up; placing
     # it below ``state`` would recursively copy the backup into itself.
-    backup_root = state.parent / "lab-dashboard-migration-backups" / timestamp
+    backup_root = _new_backup_root(state, dry_run)
     plans = [(source / "data", state), (source / "appdata", appdata)]
     compose_sources = []
     source_apps = source / "apps"
