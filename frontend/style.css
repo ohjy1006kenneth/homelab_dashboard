@@ -134,6 +134,14 @@ input[type='search']:focus { border-color: #444; }
 
 .app-select { appearance: none; background: transparent; border: 0; color: inherit; padding: 0; text-align: left; cursor: pointer; }
 .app-actions { display: flex; gap: 8px; align-items: center; }
+/* Keep the Overview launcher identity readable at laptop desktop widths. The
+   narrower two-column grid otherwise leaves inline actions only a few pixels
+   for the source name; move actions below the content before that collapse. */
+@media (min-width: 821px) and (max-width: 1300px) {
+  .overview-grid .app-card { grid-template-columns: 44px minmax(0, 1fr); align-items: start; }
+  .overview-grid .app-actions { grid-column: 1 / -1; width: 100%; flex-wrap: wrap; }
+  .overview-grid .app-actions .button { flex: 1 1 92px; text-align: center; }
+}
 .button.secondary { background: transparent; cursor: pointer; }
 .button.primary { background: var(--accent); color: #050505; border-color: var(--accent); cursor: pointer; }
 .icon-button { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); border-radius: var(--r-sm); padding: 7px 10px; cursor: pointer; }
