@@ -9,9 +9,9 @@ Type=simple
 User=juyoungoh
 Group=juyoungoh
 SupplementaryGroups=docker
-WorkingDirectory=/home/juyoungoh/nas/Projects/dashboard
+WorkingDirectory=/home/juyoungoh/dashcraft
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/juyoungoh/nas/Projects/dashboard/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765
+ExecStart=/home/juyoungoh/dashcraft/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8765
 Restart=on-failure
 RestartSec=5
 

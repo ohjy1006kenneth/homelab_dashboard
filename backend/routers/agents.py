@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -75,6 +76,10 @@ def _reap() -> None:
         RUNNING.pop(run_id, None)
 
 
+def _command_for_script(script: Path) -> list[str]:
+    return ["bash", str(script)] if script.suffix in {".sh", ".bash"} else [sys.executable, str(script)]
+
+
 @router.get("")
 def list_agents() -> list[dict]:
     _reap()
@@ -106,7 +111,7 @@ def run_agent(agent_id: str) -> dict:
     run_id = f"{agent_id}:{uuid.uuid4().hex[:10]}"
     log_path = LOG_DIR / f"{run_id.replace(':', '_')}.log"
     log_file = log_path.open("w", encoding="utf-8")
-    cmd = ["bash", str(script)] if script.suffix in {".sh", ".bash"} else ["python3", str(script)]
+    cmd = _command_for_script(script)
     proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, text=True, cwd=PROJECT_DIR, preexec_fn=os.setsid)
     RUNNING[run_id] = proc
     RUN_LOGS[run_id] = log_path

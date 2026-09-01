@@ -230,6 +230,14 @@ function routeFromHash() {
   return navigation.visible_tabs.includes(route) ? route : landing || 'overview';
 }
 
+function agentRefreshRoute() {
+  return '/api/agents';
+}
+
+function stockReviewOptionsRoute(route) {
+  return route === 'stocks' ? '/api/stocks/review-options' : null;
+}
+
 function setStatus(text, state = '') {
   statusEl.textContent = text;
   statusEl.className = `api-status ${state}`.trim();
@@ -591,6 +599,17 @@ function overviewApps() {
   const ids = overviewAppIds();
   const byId = Object.fromEntries(apps.map((app) => [app.id, app]));
   return ids.map((id) => byId[id]).filter(Boolean);
+}
+
+// Keep stale settings from blanking the launcher. A non-empty selection uses
+// the valid portion of that selection; if it has no valid apps, show the
+// normal first-page fallback instead.
+function selectOverviewApps(selectedIds, availableApps) {
+  const ids = Array.isArray(selectedIds) ? selectedIds : [];
+  const catalog = Array.isArray(availableApps) ? availableApps : [];
+  const byId = Object.fromEntries(catalog.map((app) => [app.id, app]));
+  const selected = ids.map((id) => byId[id]).filter(Boolean);
+  return selected.length ? selected : catalog.slice(0, 8);
 }
 
 function overviewAvailableApps() {
@@ -1295,8 +1314,7 @@ function drawOverviewApps() {
   const gridEl = document.querySelector('#overview-app-grid');
   const availableEl = document.querySelector('#available-app-list');
   if (!gridEl) return;
-  const selectedIds = overviewAppIds();
-  const selected = selectedIds.length ? overviewApps() : apps.slice(0, 8);
+  const selected = selectOverviewApps(overviewAppIds(), apps);
   gridEl.innerHTML = selected.length
     ? selected.map((app) => appCard(app)).join('')
     : '<div class="empty">No apps available.</div>';
@@ -2422,6 +2440,7 @@ async function load() {
     render();
     refreshMissionControl();
     loadSecondaryData();
+    if (currentRoute === 'stocks') loadStockReviewOptions();
   } catch (error) {
     setStatus(`API error: ${error.message}`, 'error');
     contentEl.innerHTML = '<div class="empty">Backend is not reachable.</div>';
@@ -2758,7 +2777,12 @@ contentEl.addEventListener('submit', (event) => {
 });
 
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modalEl.hidden) closeModal(); });
-window.addEventListener('hashchange', () => { currentRoute = routeFromHash(); if (window.location.hash.replace('#', '') !== currentRoute) window.location.hash = currentRoute; render(); });
+window.addEventListener('hashchange', () => {
+  currentRoute = routeFromHash();
+  if (window.location.hash.replace('#', '') !== currentRoute) window.location.hash = currentRoute;
+  render();
+  if (currentRoute === 'stocks') loadStockReviewOptions();
+});
 window.addEventListener('resize', scheduleOverviewResponsiveRender, { passive: true });
 window.addEventListener('orientationchange', scheduleOverviewResponsiveRender, { passive: true });
 
@@ -2793,8 +2817,11 @@ async function loadSecondaryData() {
     dailyCuration = curateRows;
     if (currentRoute !== 'overview') render();
   } catch (_) {}
+}
 
-  api('/api/stocks/review-options')
+async function loadStockReviewOptions() {
+  if (currentRoute !== 'stocks') return;
+  api(stockReviewOptionsRoute(currentRoute))
     .then((stockReviewRows) => {
       stockReviewOptions = stockReviewRows;
       stockAudit = stockReviewRows;
@@ -2821,14 +2848,11 @@ async function refreshMissionControl() {
   if (missionControlRefreshInFlight) return;
   missionControlRefreshInFlight = true;
   try {
-    const data = await api('/api/agents/mission-control').catch(() => null);
-    const project = data?.trading_project;
-    if (!data) return;
-    missionControl = data;
-    agents = data.configured_agents || agents;
-    if (project) {
-      updateAgentTokenDataFromProject(project);
-    }
+    // The dashboard backend exposes the agent list, not the former mission-control
+    // aggregate. Keep cached usage data intact and refresh only supported fields.
+    const data = await api(agentRefreshRoute()).catch(() => null);
+    if (!Array.isArray(data)) return;
+    agents = data;
     if (currentRoute === 'overview') {
       const metricsEl = document.querySelector('#metrics');
       if (metricsEl) metricsEl.innerHTML = metricsHtml(metrics);

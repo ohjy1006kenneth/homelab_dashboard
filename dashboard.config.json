@@ -6,16 +6,16 @@
     {
       "id": "newsletter-agent",
       "name": "Newsletter Fetcher",
-      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/newsletter_fetcher.py",
+      "script": "/home/juyoungoh/dashcraft/cron/run_news_cycle.py",
       "schedule": "0 8 * * *",
       "description": "Fetches and summarizes RSS newsletters"
     },
     {
       "id": "news-summarizer-agent",
       "name": "News Summarizer Agent",
-      "script": "/home/juyoungoh/nas/Projects/dashboard/cron/news_summarizer_agent.py",
+      "script": "/home/juyoungoh/dashcraft/cron/run_news_cycle.py",
       "schedule": "on demand after RSS fetch",
-      "description": "Uses Hermes news-brief profile for summarization and dashcraft profile for curation/summarization"
+      "description": "Runs the canonical Hermes news-brief fetch, summarize, and curation cycle"
     }
   ],
   "newsletter_sources": [
@@ -73,14 +73,7 @@
     "load_more_step": 10,
     "max_visible": 60
   },
-  "pinned_app_ids": [
-    "aiostreams",
-    "aiometadata",
-    "big-bear-immich",
-    "big-bear-pihole",
-    "big-bear-portainer",
-    "big-bear-syncthing"
-  ],
+  "pinned_app_ids": [],
   "preferences": {
     "overview": {
       "metrics": [
@@ -96,7 +89,7 @@
     "refresh": {
       "codex_seconds": 60,
       "metrics_seconds": 5,
-      "apps_seconds": 30,
+
       "news_seconds": 0
     },
     "news": {
@@ -117,7 +110,7 @@
       "landing_tab": "overview",
       "visible_tabs": [
         "overview",
-        "apps",
+
         "news",
         "stocks",
         "settings"
@@ -138,19 +131,11 @@
         "h": 2
       },
       {
-        "id": "metric-ram",
-        "type": "metric-ram",
-        "x": 3,
-        "y": 0,
-        "w": 3,
-        "h": 2
-      },
-      {
         "id": "metric-codex",
         "type": "metric-codex",
         "x": 6,
         "y": 0,
-        "w": 3,
+        "w": 2,
         "h": 2
       },
       {
@@ -162,60 +147,36 @@
         "h": 2
       },
       {
-        "id": "apps",
-        "type": "app-launcher",
+        "id": "weather-1788219013332",
+        "type": "weather",
         "x": 0,
         "y": 2,
-        "w": 8,
-        "h": 4
+        "w": 5,
+        "h": 3
       },
       {
-        "id": "webview",
-        "type": "webview",
+        "id": "metric-ram",
+        "type": "metric-ram",
         "x": 8,
         "y": 2,
-        "w": 4,
-        "h": 5
+        "w": 2,
+        "h": 2
       },
       {
         "id": "bookmarks",
         "type": "bookmarks",
         "x": 0,
-        "y": 6,
+        "y": 7,
         "w": 5,
         "h": 4
       },
       {
-        "id": "weather",
-        "type": "weather",
-        "x": 5,
-        "y": 6,
-        "w": 3,
-        "h": 3
-      },
-      {
-        "id": "calendar",
-        "type": "calendar",
-        "x": 8,
-        "y": 7,
-        "w": 4,
-        "h": 4
-      },
-      {
-        "id": "calculator",
-        "type": "calculator",
-        "x": 5,
-        "y": 11,
-        "w": 4,
-        "h": 3
-      },
-      {
         "id": "memo",
         "type": "memo",
-        "x": 9,
-        "y": 11,
-        "w": 3,
-        "h": 3
+        "x": 5,
+        "y": 7,
+        "w": 7,
+        "h": 4
       }
     ],
     "widgets_pinned": true,
@@ -237,10 +198,12 @@
       }
     ],
     "webview_urls": {
-      "webview-1784453222319": "https://gemini.google.com/app"
+      "webview-1784453222319": "https://gemini.google.com/app",
+      "webview": "https://google.com"
     },
     "memos": {
-      "memo-1784455289071": ""
+      "memo-1784455289071": "",
+      "memo": "e512p042\n"
     },
     "weather": {
       "latitude": null,

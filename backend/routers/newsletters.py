@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import re
-from datetime import datetime, timezone
-from pathlib import Path
 
-import feedparser
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.database import PROJECT_DIR, get_connection
+from cron.run_news_cycle import run_cycle
 
 router = APIRouter(prefix="/api/newsletters", tags=["newsletters"])
 CONFIG_PATH = PROJECT_DIR / "dashboard.config.json"
@@ -39,20 +35,30 @@ def _sources() -> list[dict]:
     return cfg.get("newsletter_sources", [])
 
 
-def _item_id(source: str, url: str, title: str) -> str:
-    return hashlib.sha1(f"{source}|{url}|{title}".encode()).hexdigest()[:20]
-
-
-def _summary(entry) -> str:
-    raw = entry.get("summary") or entry.get("description") or ""
-    text = re.sub(r"<[^>]+>", " ", str(raw))
-    text = " ".join(text.replace("\n", " ").split())
-    return text[:500] + ("…" if len(text) > 500 else "")
-
-
 @router.get("/sources")
 def sources() -> list[dict]:
     return _sources()
+
+
+@router.get("/curation")
+def curation() -> dict:
+    """Return the last persisted brief using a stable empty contract."""
+    _ensure_table()
+    with get_connection() as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS newsletter_brief (
+                id INTEGER PRIMARY KEY CHECK (id = 1), generated_at TEXT NOT NULL,
+                source TEXT NOT NULL, headline TEXT NOT NULL, items_json TEXT NOT NULL
+            )"""
+        )
+        row = conn.execute("SELECT generated_at, source, headline, items_json FROM newsletter_brief WHERE id = 1").fetchone()
+    if not row:
+        return {"generated_at": None, "source": "", "headline": "", "items": []}
+    try:
+        items = json.loads(row["items_json"])
+    except (TypeError, json.JSONDecodeError):
+        items = []
+    return {"generated_at": row["generated_at"], "source": row["source"], "headline": row["headline"], "items": items if isinstance(items, list) else []}
 
 
 @router.get("")
@@ -68,35 +74,11 @@ def list_items(source: str | None = Query(default=None)) -> list[dict]:
 
 @router.post("/fetch")
 def fetch_now() -> dict:
-    _ensure_table()
-    fetched = 0
-    errors = []
-    now = datetime.now(timezone.utc).isoformat()
-    with get_connection() as conn:
-        for source in _sources():
-            name = str(source.get("name") or source.get("rss") or "Unknown")
-            rss = source.get("rss")
-            if not rss:
-                continue
-            parsed = feedparser.parse(rss)
-            if parsed.bozo:
-                errors.append({"source": name, "error": str(parsed.bozo_exception)[:300]})
-            for entry in parsed.entries[:12]:
-                title = entry.get("title", "Untitled")
-                url = entry.get("link", "")
-                item_id = _item_id(name, url, title)
-                published = entry.get("published") or entry.get("updated") or now
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO newsletter_item (id, source, title, url, published_at, summary, fetched_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (item_id, name, title, url, published, _summary(entry), now),
-                )
-                if conn.total_changes:
-                    fetched += 1
-        conn.commit()
-    return {"ok": True, "fetched": fetched, "errors": errors}
+    try:
+        report = run_cycle()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="News cycle failed") from exc
+    return {"ok": True, "fetched": report["fetched_new"], "errors": report["errors"], **report}
 
 
 @router.post("/{item_id}/read")

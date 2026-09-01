@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse, RedirectResponse
 
-from backend.database import DATA_DIR, PROJECT_DIR, get_connection
+from backend.database import DATA_DIR, PROJECT_DIR, ensure_app_catalog, get_connection
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 APPS_DIR = PROJECT_DIR / "apps"
@@ -45,6 +45,7 @@ def _utc_stamp() -> str:
 
 
 def _app_row(app_id: str, enabled_only: bool = True) -> sqlite3.Row:
+    ensure_app_catalog()
     sql = "SELECT * FROM app WHERE id = ?"
     params: tuple[str, ...] = (app_id,)
     if enabled_only:
@@ -251,6 +252,7 @@ def _serialize_app(row: sqlite3.Row, include_services: bool = False, request: Re
 
 @router.get("")
 def list_apps(request: Request, health: bool = False) -> list[dict]:
+    ensure_app_catalog()
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM app WHERE enabled = 1 ORDER BY name COLLATE NOCASE").fetchall()
     return [_serialize_app(row, request=request, include_health=health) for row in rows]
@@ -258,6 +260,7 @@ def list_apps(request: Request, health: bool = False) -> list[dict]:
 
 @router.post("")
 def create_app(payload: AppCreate, request: Request) -> dict:
+    ensure_app_catalog()
     app_id = payload.id.strip().lower()
     try:
         compose = yaml.safe_load(payload.compose)
@@ -306,6 +309,7 @@ def create_app(payload: AppCreate, request: Request) -> dict:
 
 @router.get("/ports/check")
 def check_ports(ports: str = Query(..., description="Comma-separated ports")) -> dict:
+    ensure_app_catalog()
     parsed: list[int] = []
     for item in ports.split(","):
         item = item.strip()

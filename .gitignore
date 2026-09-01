@@ -23,3 +23,8 @@ venv/
 # App-local environment files copied from CasaOS can contain API keys.
 /apps/*/.env
 /apps/*/.env.*
+
+# Local recovery/worktree artifacts and provider usage cache.
+/.recovery-backups/
+/.worktrees/
+/data/provider_token_usage_cache.json

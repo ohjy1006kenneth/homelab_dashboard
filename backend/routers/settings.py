@@ -18,13 +18,15 @@ class SettingsUpdate(BaseModel):
     theme: str | None = None
     accent: str | None = None
     stocks: list[str] | None = None
+    pinned_app_ids: list[str] | None = None
 
 
 def _config() -> dict:
     if not CONFIG_PATH.exists():
-        return {"title": "lab.local", "theme": "dark", "accent": "#ffffff", "agents": [], "newsletter_sources": [], "stocks": DEFAULT_STOCKS}
+        return {"title": "lab.local", "theme": "dark", "accent": "#ffffff", "agents": [], "newsletter_sources": [], "stocks": DEFAULT_STOCKS, "pinned_app_ids": []}
     cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     cfg.setdefault("stocks", DEFAULT_STOCKS)
+    cfg.setdefault("pinned_app_ids", [])
     return cfg
 
 
@@ -42,6 +44,7 @@ def get_settings() -> dict:
         "stocks": cfg.get("stocks", DEFAULT_STOCKS),
         "newsletter_sources": cfg.get("newsletter_sources", []),
         "agents": cfg.get("agents", []),
+        "pinned_app_ids": cfg.get("pinned_app_ids", []),
     }
 
 
@@ -56,6 +59,8 @@ def update_settings(payload: SettingsUpdate) -> dict:
         cfg["accent"] = payload.accent
     if payload.stocks is not None:
         cfg["stocks"] = [ticker.strip().upper() for ticker in payload.stocks if ticker.strip()]
+    if payload.pinned_app_ids is not None:
+        cfg["pinned_app_ids"] = [app_id.strip() for app_id in payload.pinned_app_ids if app_id.strip()]
     _write(cfg)
     return {"ok": True, "settings": get_settings()}
 
