@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 2,
+  "configProperties": {
+    "name": "default"
+  },
+  "categories": [],
+  "wrappers": [
+    {
+      "id": "default",
+      "position": 0
+    }
+  ],
+  "apps": [],
+  "widgets": [
+    {
+      "id": "iframe-widget",
+      "type": "iframe",
+      "properties": {
+        "embedUrl": "http://10.1.188.19:7878/overview",
+        "allowFullScreen": false,
+        "allowScrolling": true,
+        "allowTransparency": true,
+        "allowPayment": false,
+        "allowAutoPlay": false,
+        "allowMicrophone": false,
+        "allowCamera": false,
+        "allowGeolocation": false
+      },
+      "area": {
+        "type": "wrapper",
+        "properties": {
+          "id": "default"
+        }
+      },
+      "shape": {
+        "lg": {
+          "location": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 12,
+            "height": 8
+          }
+        },
+        "md": {
+          "location": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 8,
+            "height": 9
+          }
+        },
+        "sm": {
+          "location": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 3,
+            "height": 16
+          }
+        }
+      }
+    }
+  ],
+  "settings": {
+    "common": {
+      "searchEngine": {
+        "type": "google",
+        "properties": {}
+      }
+    },
+    "customization": {
+      "layout": {
+        "enabledLeftSidebar": false,
+        "enabledRightSidebar": false,
+        "enabledDocker": false,
+        "enabledPing": false,
+        "enabledSearchbar": true
+      },
+      "pageTitle": "Home",
+      "logoImageUrl": "",
+      "faviconUrl": "",
+      "backgroundImageUrl": "http://10.1.188.19:7878/assets/background.jpg",
+      "customCss": "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');\nhtml, body, #__next { min-height: 100%; }\nbody {\n  font-family: Inter, ui-sans-serif, system-ui, sans-serif;\n  background-position: center !important;\n  background-size: cover !important;\n  background-attachment: fixed !important;\n}\nbody::before {\n  content: '';\n  position: fixed;\n  inset: 0;\n  z-index: -1;\n  background: linear-gradient(90deg, rgba(21,25,11,.46), rgba(47,37,20,.48));\n  backdrop-filter: blur(10px) saturate(.72);\n}\n.mantine-AppShell-header {\n  min-height: 46px !important;\n  height: 46px !important;\n  background: rgba(26,27,15,.58) !important;\n  border-bottom: 1px solid rgba(235,239,214,.08) !important;\n  backdrop-filter: blur(14px);\n}\n.mantine-AppShell-main { padding: 54px 12px 12px !important; }\n.grid-stack { margin: 0 auto !important; max-width: 1420px !important; }\n.grid-stack-item-content,\n.mantine-Paper-root:has(iframe) {\n  background: transparent !important;\n  border: 0 !important;\n  box-shadow: none !important;\n  overflow: visible !important;\n}\n.mantine-Paper-root:has(iframe) { padding: 0 !important; }\niframe { background: transparent !important; border: 0 !important; }\n.mantine-Group-root img[alt='logo'] { display: none !important; }\n@media (max-width: 600px) {\n  .mantine-AppShell-main { padding: 50px 6px 8px !important; }\n}",
+      "colors": {
+        "primary": "lime",
+        "secondary": "green",
+        "shade": 7
+      },
+      "appOpacity": 0,
+      "gridstack": {
+        "columnCountSmall": 3,
+        "columnCountMedium": 8,
+        "columnCountLarge": 12
+      }
+    },
+    "access": {
+      "allowGuests": true
+    }
+  }
+}
