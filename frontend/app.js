@@ -388,21 +388,18 @@ function readStoredAgentTokenData() {
 
 function updateAgentTokenDataFromProject(project) {
   if (!project) return;
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const mins = String(now.getMinutes()).padStart(2, '0');
+  const refreshedAt = project.refreshed_at || project.checked_at || null;
   agentTokenData = {
     ...agentTokenData,
-    codex_token_usage: project.codex_token_usage,
-    codex_token_usage_label: project.codex_token_usage_label,
-    codex_token_usage_window: project.codex_token_usage_window,
-    codex_token_usage_resets: project.codex_token_usage_resets,
-    codex_next_reset_iso: project.codex_next_reset_iso || null,
-    codex_weekly_next_reset_iso: project.codex_weekly_next_reset_iso || null,
-    codex_token_usage_error: project.token_usage_errors?.codex || null,
-    codex_tokens_live: project.codex_tokens_live ?? null,
-    refreshed_at: project.token_usage_refreshed_at || null,
-    last_update: `${hours}:${mins}`,
+    codex_token_usage: project.status === 'official' ? project.codex_token_usage : null,
+    codex_token_usage_label: project.status === 'official' ? project.codex_token_usage_label : null,
+    codex_token_usage_window: project.status === 'official' ? project.codex_token_usage_window : null,
+    codex_token_usage_resets: project.status === 'official' ? project.codex_token_usage_resets : null,
+    codex_next_reset_iso: project.status === 'official' ? project.codex_next_reset_iso || null : null,
+    codex_weekly_next_reset_iso: project.status === 'official' ? project.codex_weekly_next_reset_iso || null : null,
+    codex_token_usage_error: project.status === 'auth_required' ? 'Codex auth needs sign-in' : (project.error || null),
+    refreshed_at: refreshedAt,
+    last_update: refreshedAt ? formatMetricUpdate(refreshedAt).replace(/^Refreshed\s+/, '') : null,
   };
   localStorage.setItem('agentTokenData', JSON.stringify(agentTokenData));
 }
@@ -1692,6 +1689,8 @@ function ensureStockSelectionFromOptions(options = stockReviewOptions || stockAu
 function stockAuditUrl() {
   const packet = selectedStockPacket();
   const params = new URLSearchParams();
+  const runId = packet.run_id || stockAudit?.query?.run_id;
+  if (runId) params.set('run_id', runId);
   const fromDate = packet.from_date || stockAudit?.query?.from_date;
   const toDate = packet.to_date || stockAudit?.query?.to_date || fromDate;
   if (fromDate) params.set('from_date', fromDate);
@@ -2848,11 +2847,8 @@ async function refreshMissionControl() {
   if (missionControlRefreshInFlight) return;
   missionControlRefreshInFlight = true;
   try {
-    // The dashboard backend exposes the agent list, not the former mission-control
-    // aggregate. Keep cached usage data intact and refresh only supported fields.
-    const data = await api(agentRefreshRoute()).catch(() => null);
-    if (!Array.isArray(data)) return;
-    agents = data;
+    const data = await api('/api/agents/codex-usage').catch((error) => ({ status: 'provider_error', error: error.message }));
+    updateAgentTokenDataFromProject(data);
     if (currentRoute === 'overview') {
       const metricsEl = document.querySelector('#metrics');
       if (metricsEl) metricsEl.innerHTML = metricsHtml(metrics);
