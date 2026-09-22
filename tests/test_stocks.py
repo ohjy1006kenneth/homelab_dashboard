@@ -43,6 +43,7 @@ class TestReviewOptions:
             resp = client.get("/api/stocks/review-options")
         data = resp.json()
         assert resp.status_code == 200
+        assert data["ok"] is True
         assert "candidates" in data
         assert "default_selection" in data
         assert len(data["candidates"]) == 2
@@ -58,19 +59,22 @@ class TestReviewOptions:
             resp = client.get("/api/stocks/review-options")
         data = resp.json()
         assert resp.status_code == 200
+        assert data["ok"] is True
         assert data["candidates"] == []
         assert data["default_selection"] == {}
 
-    def test_error_includes_error_field(self):
-        """When _find_run_ids raises, response contains error info."""
+    def test_error_includes_error_envelope(self):
+        """When _find_run_ids raises, response contains ok/status/reason."""
         with mock.patch("backend.routers.stocks._find_run_ids", side_effect=OSError("no access")):
             resp = client.get("/api/stocks/review-options")
         data = resp.json()
         assert resp.status_code == 200
+        assert data["ok"] is False
+        assert data["status"] == "fail"
+        assert "reason" in data
+        assert "no access" in data["reason"]
         assert data["candidates"] == []
         assert data["default_selection"] == {}
-        assert "error" in data
-        assert "no access" in data["error"]
 
 
 # ── /api/stocks/audit ─────────────────────────────────────────────────────────
@@ -231,6 +235,22 @@ class TestAudit:
         assert "review_options" in data
         assert "candidates" in data["review_options"]
         assert "default_selection" in data["review_options"]
+
+    def test_audit_discovery_error_returns_error_schema(self):
+        """TCR-009: When _find_run_ids raises, error is caught (not HTTP 500)."""
+        with mock.patch("backend.routers.stocks._find_run_ids", side_effect=OSError("disk failure")):
+            resp = client.get(
+                "/api/stocks/audit",
+                params={"from_date": "2025-01-01", "to_date": "2026-09-21", "tickers": "AAPL"},
+            )
+        data = resp.json()
+        assert resp.status_code == 200
+        assert data["ok"] is False
+        assert data["status"] == "fail"
+        assert "reason" in data
+        assert "disk failure" in data["reason"]
+        assert data["payload"] == {}
+        assert "query" in data
 
 
 # ── sys.path ordering ─────────────────────────────────────────────────────────

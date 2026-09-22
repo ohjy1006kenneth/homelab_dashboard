@@ -94,12 +94,14 @@ def review_options():
     """Return available review packets and default selection."""
     try:
         result = _build_review_options()
-        return result
+        return {**result, "ok": True}
     except Exception as exc:
         return {
+            "ok": False,
+            "status": "fail",
+            "reason": f"{type(exc).__name__}: {exc}",
             "candidates": [],
             "default_selection": {},
-            "error": str(exc),
         }
 
 
@@ -111,10 +113,9 @@ def audit(
 ):
     """Return the full semantic review audit payload."""
     ticker = tickers.split(",")[0].strip().upper()
-    run_ids = _find_run_ids()
-    run_id = run_ids[0] if run_ids else "2026-09-11"
-
     try:
+        run_ids = _find_run_ids()
+        run_id = run_ids[0] if run_ids else "2026-09-11"
         payload = _build_audit_payload(run_id, from_date, to_date, ticker)
         review_opts = _build_review_options()
         return {
