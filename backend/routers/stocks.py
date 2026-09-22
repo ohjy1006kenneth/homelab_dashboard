@@ -79,6 +79,35 @@ print(json.dumps(payload, default=str))
     return json.loads(result.stdout)
 
 
+def _extract_packet_dates(run_id: str) -> tuple[str, str]:
+    """Extract from_date/to_date from feature filenames in the run directory.
+
+    Filenames like ``layer1-daily-2026-09-10-2026-09-10`` encode
+    ``prefix-YYYY-MM-DD-YYYY-MM-DD``; we use the earliest as from_date
+    and the latest as to_date.  Falls back to the run_id itself.
+    """
+    import re
+    features_dir = LOCAL_R2_ROOT / "features" / run_id
+    if not features_dir.is_dir():
+        return run_id, run_id
+
+    pattern = re.compile(r"(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})$")
+    dates: list[str] = []
+    for feat_sub in features_dir.iterdir():
+        if not feat_sub.is_dir():
+            continue
+        for f in feat_sub.iterdir():
+            m = pattern.search(f.name)
+            if m:
+                dates.append(m.group(1))
+                dates.append(m.group(2))
+
+    if not dates:
+        return run_id, run_id
+
+    return min(dates), max(dates)
+
+
 def _build_review_options() -> dict[str, Any]:
     """Build review options (candidates + default) from available packet metadata."""
     run_ids = _find_run_ids()
@@ -87,11 +116,13 @@ def _build_review_options() -> dict[str, Any]:
 
     candidates = []
     for run_id in run_ids:
+        from_date, to_date = _extract_packet_dates(run_id)
+        label_dates = from_date if from_date == to_date else f"{from_date} to {to_date}"
         candidates.append({
             "id": run_id,
-            "label": f"{', '.join(PILOT_TICKERS)} · 2025-01-01 to {run_id}",
-            "from_date": "2025-01-01",
-            "to_date": run_id,
+            "label": f"{', '.join(PILOT_TICKERS)} · {label_dates}",
+            "from_date": from_date,
+            "to_date": to_date,
             "tickers": list(PILOT_TICKERS),
             "run_id": run_id,
         })
@@ -162,42 +193,46 @@ def audit(
             "query": {"from_date": from_date, "to_date": to_date, "tickers": tickers_list},
         }
 
-    ticker = tickers_list[0]  # Isolate first requested ticker for single-ticker audit
     try:
-        payload = _build_audit_payload(run_id, from_date, to_date, ticker)
-        review_opts = _build_review_options()
+        results: dict[str, Any] = {}
+        errors: dict[str, str] = {}
+        for ticker in tickers_list:
+            try:
+                results[ticker] = _build_audit_payload(run_id, from_date, to_date, ticker)
+            except RuntimeError as exc:
+                errors[ticker] = str(exc)
+
+        if not results:
+            # All tickers failed — re-raise so outer handler returns PacketContractError
+            raise RuntimeError("; ".join(f"{t}: {e}" for t, e in errors.items()))
+
+        # Aggregate counts across all successful tickers
+        aggregated_counts: dict[str, Any] = {}
+        for tkr, tkr_payload in results.items():
+            for topic, count in tkr_payload.get("counts", {}).items():
+                aggregated_counts[topic] = aggregated_counts.get(topic, 0) + count
+
         return {
             "ok": True,
-            "status": payload.get("status", "pass"),
+            "status": "fail" if errors else "pass",
             "run_id": run_id,
             "query": {
                 "from_date": from_date,
                 "to_date": to_date,
                 "tickers": tickers_list,
             },
-            "payload": payload,
-            "review_options": review_opts,
-            "review_counts": payload.get("counts", {}),
+            "payload": {
+                "tickers": results,
+                **({"errors": errors} if errors else {}),
+            },
+            "review_options": _build_review_options(),
+            "review_counts": aggregated_counts,
         }
     except RuntimeError as exc:
         return {
             "ok": False,
             "status": "fail",
             "error": "PacketContractError",
-            "reason": str(exc),
-            "run_id": run_id,
-            "payload": {},
-            "query": {
-                "from_date": from_date,
-                "to_date": to_date,
-                "tickers": tickers_list,
-            },
-        }
-    except Exception as exc:
-        return {
-            "ok": False,
-            "status": "fail",
-            "error": type(exc).__name__,
             "reason": str(exc),
             "run_id": run_id,
             "payload": {},
