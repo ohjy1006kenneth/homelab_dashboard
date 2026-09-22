@@ -33,7 +33,7 @@ body::before {
   backdrop-filter: blur(14px);
 }
 .mantine-AppShell-main { padding: 54px 12px 12px !important; }
-.grid-stack { margin: 0 auto !important; max-width: 1420px !important; }
+.grid-stack { width: 100% !important; margin: 0 auto !important; max-width: 1420px !important; }
 .grid-stack-item-content,
 .mantine-Paper-root:has(iframe) {
   background: transparent !important;
@@ -50,14 +50,14 @@ iframe { background: transparent !important; border: 0 !important; }
 """.strip()
 
 config = {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "configProperties": {"name": "default"},
     "categories": [],
     "wrappers": [{"id": "default", "position": 0}],
     "apps": [],
     "widgets": [
         {
-            "id": "iframe-widget",
+            "id": "282c132d-d6d4-46fa-a5f4-51fbab60da4d",
             "type": "iframe",
             "properties": {
                 "embedUrl": f"http://{HOST}:7878/overview",

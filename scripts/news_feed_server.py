@@ -134,7 +134,7 @@ def fetch_news() -> list[dict[str, str]]:
     try:
         rows = connection.execute(
             "SELECT source, title, url, published_at, summary "
-            "FROM newsletter_item ORDER BY published_at DESC, fetched_at DESC LIMIT ?",
+            "FROM newsletter_item ORDER BY fetched_at DESC LIMIT ?",
             (MAX_ITEMS,),
         ).fetchall()
     finally:

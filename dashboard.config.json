@@ -89,7 +89,6 @@
     "refresh": {
       "codex_seconds": 60,
       "metrics_seconds": 5,
-
       "news_seconds": 0
     },
     "news": {
@@ -110,7 +109,6 @@
       "landing_tab": "overview",
       "visible_tabs": [
         "overview",
-
         "news",
         "stocks",
         "settings"
@@ -203,7 +201,7 @@
     },
     "memos": {
       "memo-1784455289071": "",
-      "memo": "e512p042\n"
+      "memo": "e512p042\n\n"
     },
     "weather": {
       "latitude": null,
