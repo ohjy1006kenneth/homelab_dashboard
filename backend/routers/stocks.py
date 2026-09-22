@@ -15,6 +15,19 @@ TRADER_VENV_PYTHON = Path("/home/juyoungoh/AI-Stock-Trader/.venv/bin/python")
 TRADER_ROOT = Path("/home/juyoungoh/AI-Stock-Trader")
 LOCAL_R2_ROOT = TRADER_ROOT / "data" / "runtime" / "local_r2"
 SUBPROCESS_TIMEOUT = 120  # seconds
+PILOT_TICKERS = ["AAPL", "AMD", "NVDA", "MSFT"]
+
+
+class PacketNotFoundError(Exception):
+    """Requested run_id does not exist or was not provided."""
+
+
+class PacketIntegrityError(Exception):
+    """Packet metadata cannot be discovered or is corrupt."""
+
+
+class PacketContractError(Exception):
+    """Packet contents violate the expected schema."""
 
 
 def _find_run_ids() -> list[str]:
@@ -67,7 +80,7 @@ print(json.dumps(payload, default=str))
 
 
 def _build_review_options() -> dict[str, Any]:
-    """Build review options (candidates + default) via subprocess."""
+    """Build review options (candidates + default) from available packet metadata."""
     run_ids = _find_run_ids()
     if not run_ids:
         return {"candidates": [], "default_selection": {}}
@@ -76,10 +89,10 @@ def _build_review_options() -> dict[str, Any]:
     for run_id in run_ids:
         candidates.append({
             "id": run_id,
-            "label": f"AAPL \u00b7 2025-01-01 to {run_id}",
+            "label": f"{', '.join(PILOT_TICKERS)} · 2025-01-01 to {run_id}",
             "from_date": "2025-01-01",
             "to_date": run_id,
-            "tickers": ["AAPL"],
+            "tickers": list(PILOT_TICKERS),
             "run_id": run_id,
         })
 
@@ -107,30 +120,90 @@ def review_options():
 
 @router.get("/api/stocks/audit")
 def audit(
+    run_id: str | None = Query(None),
     from_date: str = Query("2025-01-01"),
     to_date: str = Query(default_factory=lambda: date.today().isoformat()),
     tickers: str = Query("AAPL"),
 ):
-    """Return the full semantic review audit payload."""
-    ticker = tickers.split(",")[0].strip().upper()
+    """Return the full semantic review audit payload for the specified packet."""
+    tickers_list = list(dict.fromkeys(
+        t.strip().upper() for t in tickers.split(",") if t.strip()
+    )) or PILOT_TICKERS[:1]
+
+    if not run_id:
+        return {
+            "ok": False,
+            "status": "fail",
+            "error": "PacketNotFoundError",
+            "reason": "run_id is required; select a packet from /api/stocks/review-options",
+            "payload": {},
+            "query": {"from_date": from_date, "to_date": to_date, "tickers": tickers_list},
+        }
+
     try:
-        run_ids = _find_run_ids()
-        run_id = run_ids[0] if run_ids else "2026-09-11"
+        available = _find_run_ids()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": "fail",
+            "error": "PacketIntegrityError",
+            "reason": f"Packet discovery failed: {exc}",
+            "payload": {},
+            "query": {"from_date": from_date, "to_date": to_date, "tickers": tickers_list},
+        }
+
+    if run_id not in available:
+        return {
+            "ok": False,
+            "status": "fail",
+            "error": "PacketNotFoundError",
+            "reason": f"Packet '{run_id}' not found; available: {available}",
+            "payload": {},
+            "query": {"from_date": from_date, "to_date": to_date, "tickers": tickers_list},
+        }
+
+    ticker = tickers_list[0]  # Isolate first requested ticker for single-ticker audit
+    try:
         payload = _build_audit_payload(run_id, from_date, to_date, ticker)
         review_opts = _build_review_options()
         return {
             "ok": True,
             "status": payload.get("status", "pass"),
-            "query": {"from_date": from_date, "to_date": to_date, "tickers": [ticker]},
+            "run_id": run_id,
+            "query": {
+                "from_date": from_date,
+                "to_date": to_date,
+                "tickers": tickers_list,
+            },
             "payload": payload,
             "review_options": review_opts,
             "review_counts": payload.get("counts", {}),
+        }
+    except RuntimeError as exc:
+        return {
+            "ok": False,
+            "status": "fail",
+            "error": "PacketContractError",
+            "reason": str(exc),
+            "run_id": run_id,
+            "payload": {},
+            "query": {
+                "from_date": from_date,
+                "to_date": to_date,
+                "tickers": tickers_list,
+            },
         }
     except Exception as exc:
         return {
             "ok": False,
             "status": "fail",
-            "reason": f"{type(exc).__name__}: {exc}",
+            "error": type(exc).__name__,
+            "reason": str(exc),
+            "run_id": run_id,
             "payload": {},
-            "query": {"from_date": from_date, "to_date": to_date, "tickers": [ticker]},
+            "query": {
+                "from_date": from_date,
+                "to_date": to_date,
+                "tickers": tickers_list,
+            },
         }
