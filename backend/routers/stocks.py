@@ -152,8 +152,8 @@ def review_options():
 @router.get("/api/stocks/audit")
 def audit(
     run_id: str | None = Query(None),
-    from_date: str = Query("2025-01-01"),
-    to_date: str = Query(default_factory=lambda: date.today().isoformat()),
+    from_date: str | None = Query(None),
+    to_date: str | None = Query(None),
     tickers: str = Query("AAPL"),
 ):
     """Return the full semantic review audit payload for the specified packet."""
@@ -192,6 +192,13 @@ def audit(
             "payload": {},
             "query": {"from_date": from_date, "to_date": to_date, "tickers": tickers_list},
         }
+
+    # Default from_date/to_date from the packet's actual dates
+    pkt_from, pkt_to = _extract_packet_dates(run_id)
+    if from_date is None:
+        from_date = pkt_from
+    if to_date is None:
+        to_date = pkt_to
 
     try:
         results: dict[str, Any] = {}

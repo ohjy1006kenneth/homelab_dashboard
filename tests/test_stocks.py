@@ -90,7 +90,8 @@ class TestAuditWithRunId:
         data = resp.json()
         assert data.get("run_id") == run_id
         assert "query" in data
-        assert data["query"]["from_date"] == "2025-01-01"
+        # from_date defaults to the packet's actual dates, not a hard-coded value
+        assert "from_date" in data["query"]
         assert "tickers" in data["query"]
 
     def test_audit_preserves_exact_query_params(self):
@@ -120,13 +121,13 @@ class TestAuditWithRunId:
         opts_resp = client.get("/api/stocks/review-options")
         opts_data = opts_resp.json()
         if not opts_data.get("candidates"):
-            pytest.skip("No available packets to test with")
+            pytest.skip("No available packets")
         run_id = opts_data["candidates"][0]["run_id"]
 
         resp = client.get(f"/api/stocks/audit?run_id={run_id}")
         data = resp.json()
-        if data.get("ok"):
-            assert "review_options" in data
+        assert data.get("ok") is True, f"Expected ok=True but got: {data}"
+        assert "review_options" in data
 
 
 class TestPacketErrorClasses:
@@ -190,8 +191,8 @@ class TestNoSilentSubstitution:
         run_id = candidates[1]["run_id"]
         resp = client.get(f"/api/stocks/audit?run_id={run_id}")
         data = resp.json()
-        if data.get("ok"):
-            assert data["run_id"] == run_id
+        assert data.get("ok") is True, f"Expected ok=True but got: {data}"
+        assert data["run_id"] == run_id
 
     def test_audit_never_returns_ok_with_missing_run_id(self):
         """Audit without run_id never returns ok=True (no silent fallback)."""
