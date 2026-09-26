@@ -1733,9 +1733,119 @@ function blockerBox(title, copy) {
   return `<div class="not-reviewable-box"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(copy)}</p></div>`;
 }
 
+function stockReviewStateBadge(state = {}) {
+  const value = String(state.state || state.status || '').toLowerCase();
+  if (['fail', 'failed', 'blocked', 'error', 'unavailable', 'not_available'].includes(value)) return auditBadge('fail');
+  if (['warn', 'warning', 'unknown', 'no_data'].includes(value)) return auditBadge('warn');
+  return auditBadge(value ? 'pass' : 'warn');
+}
+
+function stockReviewCountHtml(label, key, review = {}) {
+  const counts = review.review_counts || {};
+  const reasons = review.review_count_reasons || {};
+  const value = counts[key];
+  const available = Number.isInteger(value) && value >= 0;
+  return `<article class="review-card ${available ? 'ready' : 'needs-attention'}"><span>${escapeHtml(label)}</span><strong>${available ? value : 'Not exposed'}</strong>${!available && reasons[key] ? `<p>${escapeHtml(reasons[key])}</p>` : ''}</article>`;
+}
+
+function stockReviewStateHtml(label, key, review = {}) {
+  const state = review.states?.[key] || {};
+  const reasons = Array.isArray(review.decision_reasons?.[key])
+    ? review.decision_reasons[key].filter(Boolean)
+    : [];
+  const stateReason = typeof state.reason === 'string' ? state.reason : '';
+  const explanation = [...new Set([stateReason, ...reasons])].filter(Boolean);
+  const status = state.state || state.status || 'unknown';
+  return `<article class="review-card"><div><p class="eyebrow">${escapeHtml(label)}</p><h3>${escapeHtml(String(status))}</h3></div>${stockReviewStateBadge(state)}${explanation.length ? `<p>${explanation.map((reason) => escapeHtml(reason)).join('<br>')}</p>` : '<p>No producer decision reason was exposed.</p>'}</article>`;
+}
+
+function packetBackedStockAuditHtml() {
+  ensureStockSelectionFromOptions(stockReviewOptions || stockAudit.review_options || stockAudit);
+  const packet = selectedStockPacket();
+  const candidates = stockPacketCandidates();
+  const packetTickers = Array.isArray(packet.tickers)
+    ? packet.tickers.map((item) => String(item).toUpperCase())
+    : [];
+  const requestedTickers = Array.isArray(stockAudit.query?.tickers)
+    ? stockAudit.query.tickers.map((item) => String(item).toUpperCase())
+    : [];
+  const reviews = Array.isArray(stockAudit.reviews) ? stockAudit.reviews : [];
+  const selectedTicker = String(
+    stockSelectedTicker || requestedTickers[0] || packetTickers[0] || '',
+  ).toUpperCase();
+  const review = reviews.find((item) => String(item?.ticker || '').toUpperCase() === selectedTicker) || null;
+  const payloadTickers = stockAudit.payload?.tickers && typeof stockAudit.payload.tickers === 'object'
+    ? stockAudit.payload.tickers
+    : {};
+  const payloadLoaded = Object.prototype.hasOwnProperty.call(payloadTickers, selectedTicker);
+  const tickerError = stockAudit.ticker_errors?.[selectedTicker]
+    || stockAudit.payload?.errors?.[selectedTicker]
+    || null;
+  const query = review?.query || stockAudit.query || {};
+  const runId = review?.run_id || stockAudit.run_id || packet.run_id || '—';
+  const start = query.from_date || packet.from_date || '—';
+  const end = query.to_date || packet.to_date || start;
+  const correlation = review?.producer_correlation || {};
+  const exactCorrelation = review && correlation.run_id === review.run_id
+    && correlation.from_date === review.query?.from_date
+    && correlation.to_date === review.query?.to_date
+    && correlation.ticker === review.query?.ticker;
+  const unavailable = !review || review.status === 'unavailable' || Boolean(tickerError);
+  const statusTitle = unavailable ? 'Not reviewable' : String(review.status || stockAudit.status || 'Review available').replaceAll('_', ' ');
+  const statusClass = unavailable ? 'fail' : (stockAudit.ok ? 'pass' : 'warn');
+  const packetOptions = candidates.length
+    ? candidates.map((candidate) => `<option value="${escapeHtml(candidate.id || '')}" ${candidate.id === packet.id ? 'selected' : ''}>${escapeHtml(candidate.label || candidate.id || 'Review packet')}</option>`).join('')
+    : `<option>${escapeHtml(packet.label || runId)}</option>`;
+  const tickerChoices = packetTickers.length ? packetTickers : requestedTickers;
+  const tickerOptions = tickerChoices.length
+    ? tickerChoices.map((ticker) => `<option value="${escapeHtml(ticker)}" ${ticker === selectedTicker ? 'selected' : ''}>${escapeHtml(ticker)}</option>`).join('')
+    : `<option value="${escapeHtml(selectedTicker)}">${escapeHtml(selectedTicker || 'No ticker')}</option>`;
+  const errorHtml = tickerError
+    ? `<div class="not-reviewable-box"><strong>${escapeHtml(tickerError.error || stockAudit.error || 'SemanticEvidenceUnavailable')}</strong><p>${escapeHtml(friendlyStockWarning(tickerError.reason || stockAudit.reason || 'Selected-ticker evidence is unavailable.'))}</p></div>`
+    : '';
+  const countsHtml = review
+    ? [
+      ['Input articles', 'input_article_count'],
+      ['Sentence rows', 'sentence_row_count'],
+      ['Reviewed articles', 'reviewed_article_count'],
+      ['Relevance rows', 'relevance_row_count'],
+      ['Accepted decisions', 'accepted_decision_count'],
+      ['Borderline decisions', 'borderline_decision_count'],
+      ['Rejected decisions', 'rejected_decision_count'],
+    ].map(([label, key]) => stockReviewCountHtml(label, key, review)).join('')
+    : '<div class="empty compact">No normalized review was returned for the selected ticker.</div>';
+  const statesHtml = review
+    ? [
+      ['Ticker association', 'ticker_association'],
+      ['Relevance', 'relevance'],
+      ['FinBERT', 'finbert'],
+      ['Topic', 'topic'],
+    ].map(([label, key]) => stockReviewStateHtml(label, key, review)).join('')
+    : '';
+
+  return `<section class="panel stock-control-panel">
+    <div class="panel-head manager-head"><div><p class="eyebrow">Packet controls</p><h2>${escapeHtml(selectedTicker)} evidence review</h2><p class="section-copy">The selected packet, date, and ticker are preserved in every audit request.</p></div><button class="button secondary" data-refresh-stock-audit="true">Refresh</button></div>
+    <div class="stock-control-grid"><label>Packet/date<select data-stock-packet>${packetOptions}</select></label><label>Ticker<select data-stock-ticker>${tickerOptions}</select></label><div class="review-ready-meta"><span>Run: ${escapeHtml(runId)}</span><span>Window: ${escapeHtml(start)} → ${escapeHtml(end)}</span><span>Requested: ${escapeHtml(requestedTickers.join(', ') || selectedTicker)}</span></div></div>
+  </section>
+  <section class="panel review-ready-panel ${statusClass}">
+    <div class="panel-head manager-head"><div><p class="eyebrow">Selected ticker reviewability</p><h2>${escapeHtml(statusTitle)}</h2><p class="section-copy">Evidence below comes from the normalized review for ${escapeHtml(selectedTicker)}, not aggregate counts from another ticker.</p></div></div>
+    <div class="review-ready-meta"><span>Packet ticker payload</span><strong>${payloadLoaded ? 'loaded' : 'unavailable'}</strong><span>Producer correlation</span><strong>${exactCorrelation ? 'exact' : 'not exact'}</strong><span>Smoke</span><strong>${escapeHtml(review?.smoke_status || 'unknown')}</strong><span>Cached fallback</span><strong>${review?.cached_fallback_used === true ? 'used' : 'not used'}</strong></div>
+    ${errorHtml}
+  </section>
+  <section class="panel audit-panel nlp-review-flow">
+    <div class="panel-head manager-head"><div><p class="eyebrow">Packet-backed evidence</p><h2>${escapeHtml(selectedTicker)} evidence counts</h2><p class="section-copy">Unknown producer counts remain unavailable rather than being displayed as measured zeroes.</p></div></div>
+    <div class="review-card-grid">${countsHtml}</div>
+    <details class="nlp-section" open><summary>Producer states and decision reasons</summary><div class="review-card-grid">${statesHtml}</div></details>
+    <details class="advanced-diagnostics"><summary>Aggregate counts and exact correlation</summary><pre>${escapeHtml(JSON.stringify({ run_id: stockAudit.run_id, query: stockAudit.query, selected_review: review, aggregate_review_counts: stockAudit.review_counts, selected_ticker_error: tickerError }, null, 2))}</pre></details>
+  </section>`;
+}
+
 function stockAuditHtml() {
   if (!stockAudit) {
     return '<section class="panel audit-panel"><div class="panel-head"><div><p class="eyebrow">AI Stock Trader</p><h2>NLP review</h2><p class="section-copy">Loading ticker-selectable NLP review options…</p></div><button class="button secondary" data-refresh-stock-audit="true">Refresh</button></div><div class="empty">Loading Stocks review data…</div></section>';
+  }
+  if (Array.isArray(stockAudit.reviews) && stockAudit.reviews.length) {
+    return packetBackedStockAuditHtml();
   }
   if (!stockAudit.ok) {
     const reason = friendlyStockWarning(stockAudit.reason || 'Audit data unavailable.');

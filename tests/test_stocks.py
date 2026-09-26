@@ -1,5 +1,8 @@
 """Regression tests for packet-backed Stock audit and review-options endpoints."""
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -614,6 +617,38 @@ class TestAuthoritativePacketAdapter:
             review["states"]["finbert"]["status"] == "available"
             for review in data["reviews"]
         )
+
+    def test_packet_backed_response_renders_selected_ticker(self, tmp_path, monkeypatch):
+        """The frontend renders an actual audit endpoint response for the selected ticker."""
+        if shutil.which("node") is None:
+            pytest.skip("Node.js is required for the frontend rendering contract test")
+        diagnostics = tmp_path / "diagnostics"
+        self._write_packet(diagnostics, self._packet())
+        monkeypatch.setattr(stocks, "DIAGNOSTICS_ROOT", diagnostics)
+        data = client.get(
+            "/api/stocks/audit",
+            params={
+                "run_id": "issue281-post-pr306-current-prod-20260904-v1",
+                "from_date": "2026-09-04",
+                "to_date": "2026-09-04",
+                "tickers": "AAPL,AMD,NVDA,MSFT",
+            },
+        ).json()
+        env = os.environ.copy()
+        env["STOCK_AUDIT_RESPONSE"] = json.dumps(data)
+        root = Path(__file__).resolve().parent.parent
+
+        result = subprocess.run(
+            ["node", "--test", "tests/stocks_render.test.mjs"],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
 
     def test_zero_evidence_fails_closed(self, tmp_path, monkeypatch):
         """A canonical zero article/row record cannot produce ok=true."""
